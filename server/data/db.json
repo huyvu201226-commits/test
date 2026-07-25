@@ -1,6 +1,18 @@
 {
   "accounts": [
     {
+      "id": 1785008150914,
+      "code": "01",
+      "name": "qlen",
+      "info": "",
+      "description": "",
+      "price": 200000,
+      "category": "mid",
+      "type": "vip",
+      "status": "selling",
+      "img": "/uploads/1785008150880_96qcjg.jpg"
+    },
+    {
       "id": 1,
       "code": "JH-01",
       "name": "Acc Liên Quân Siêu VIP 50 Tướng",
@@ -91,6 +103,19 @@
     "adminPasswordSalt": "cf6e107b09c5facad9d28f452565d11a"
   },
   "events": [],
-  "activityLog": [],
-  "deviceState": {}
+  "activityLog": [
+    {
+      "time": 1785008150914,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc 01 (qlen)."
+    }
+  ],
+  "deviceState": {
+    "JH-DISC-FK17DU": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    }
+  }
 }

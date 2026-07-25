@@ -4,6 +4,8 @@
 // nâng cấp sang MySQL/Postgres sau này mà không đổi API phía trên).
 // Chạy: npm install && npm start   (mặc định cổng 3000, đổi bằng biến môi trường PORT)
 // ============================================================
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -11,6 +13,24 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
+
+const { MongoClient } = require("mongodb");
+
+const MONGO_URL = process.env.MONGO_URL;
+
+console.log(MONGO_URL);
+
+let mongoDB;
+
+async function connectMongo(){
+    const client = new MongoClient(MONGO_URL);
+    await client.connect();
+
+    mongoDB = client.db("jhush");
+
+    console.log("MongoDB connected");
+}
+
 
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
@@ -29,7 +49,36 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 let db = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
 let saveQueue = Promise.resolve();
 function persist() {
-    saveQueue = saveQueue.then(() => fsp.writeFile(DB_PATH, JSON.stringify(db, null, 2), 'utf-8'));
+
+    saveQueue = saveQueue.then(async () => {
+
+        // vẫn lưu local để backup
+        await fsp.writeFile(
+            DB_PATH,
+            JSON.stringify(db, null, 2),
+            'utf-8'
+        );
+
+
+        // lưu MongoDB
+        if(mongoDB){
+
+            await mongoDB.collection("shop").updateOne(
+                {
+                    _id:"main"
+                },
+                {
+                    $set:db
+                },
+                {
+                    upsert:true
+                }
+            );
+
+        }
+
+    });
+
     return saveQueue;
 }
 
@@ -53,7 +102,6 @@ function ensureAdminPasswordInitialized() {
         persist();
     }
 }
-ensureAdminPasswordInitialized();
 
 function publicSettings(s) {
     const { adminPasswordHash, adminPasswordSalt, ...rest } = s;
@@ -472,7 +520,44 @@ app.delete('/api/events/:id', requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-    console.log(`Shop J-Hush server đang chạy tại http://localhost:${PORT}`);
-    console.log(`Mật khẩu admin mặc định (nếu chưa từng đổi): ${DEFAULT_ADMIN_PASSWORD}`);
+connectMongo().then(async ()=>{
+
+    // load dữ liệu từ MongoDB nếu có
+    const saved = await mongoDB
+        .collection("shop")
+        .findOne({_id:"main"});
+
+
+    if(saved){
+
+        delete saved._id;
+
+        db = saved;
+
+        console.log("Loaded data from MongoDB");
+
+    } else {
+
+        await persist();
+
+        console.log("Created MongoDB database");
+
+    }
+
+
+    ensureAdminPasswordInitialized();
+
+
+    app.listen(PORT, () => {
+
+        console.log(
+        `Shop J-Hush server đang chạy tại http://localhost:${PORT}`
+        );
+
+        console.log(
+        `Mật khẩu admin mặc định: ${DEFAULT_ADMIN_PASSWORD}`
+        );
+
+    });
+
 });
