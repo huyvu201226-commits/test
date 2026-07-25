@@ -3,3 +3,5 @@ server/node_modules/
 uploads/
 .history/
 .vscode/
+.env
+server/.env
