@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Shop J-Hush - Hệ thống cung cấp tài khoản game uy tín, giá rẻ, thanh toán tự động qua QR 24/7.">
+    <title>Shop J-Hush - Hệ Thống Tài Khoản Game Uy Tín</title>
+    <!-- Preconnect tới các domain bên ngoài để giảm độ trễ DNS/TLS khi tải font & ảnh -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+    <link rel="preconnect" href="https://img.vietqr.io" crossorigin>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS Tùy Chỉnh -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Lớp nền động giả lập iFrame/Mask -->
+    <div class="default-mask"></div>
+
+    <!-- Màn hình chào mừng lần đầu truy cập (Kích hoạt âm thanh & Vào trang) -->
+    <div class="welcome-overlay" id="welcomeOverlay">
+        <div class="welcome-card animate-pop">
+            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="welcome-logo site-logo" id="welcomeLogoImg" alt="Logo">
+            <h2 class="brand-title" style="margin-bottom: 8px;">Shop J-Hush</h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">Hệ thống cung cấp tài khoản game uy tín, giá rẻ và tự động 24/7.</p>
+            <button class="btn-continue" onclick="enterWebsite()">ẤN VÀO ĐÂY ĐỂ TIẾP TỤC</button>
+        </div>
+    </div>
+
+    <!-- Thanh Điều Hướng (Navbar) -->
+    <header class="top-navbar">
+        <div class="nav-left">
+            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="site-logo" id="navbarLogoImg" alt="Logo">
+            <span class="brand-title">Shop J-Hush</span>
+        </div>
+        <nav class="nav-right">
+            <a href="#" class="nav-link" onclick="switchTab('promoTab', this)"><i class="fa-solid fa-gift"></i> Ưu Đãi</a>
+            <a href="#" class="nav-link" onclick="switchTab('randomTab', this)"><i class="fa-solid fa-dice"></i> Acc Random Free</a>
+            <a href="#" class="nav-link active" onclick="switchTab('introTab', this)"><i class="fa-solid fa-circle-info"></i> Giới Thiệu</a>
+            <a href="#" class="nav-link" onclick="switchTab('shopTab', this)"><i class="fa-solid fa-store"></i> Lựa Acc Có Sẵn</a>
+            <a href="#" class="nav-link" onclick="switchTab('formTab', this)"><i class="fa-solid fa-file-pen"></i> Đăng Kí Mua Acc</a>
+            <a href="admin.html" class="nav-link admin-nav-btn"><i class="fa-solid fa-shield-halved"></i> Quản Trị</a>
+            <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()"><i class="fa-solid fa-sun"></i> Sáng</button>
+        </nav>
+    </header>
+
+    <!-- Nội Dung Chính SPA (Khách Hàng) -->
+    <main class="main-content">
+
+        <!-- TAB 1: ƯU ĐÃI (PROMO) -->
+        <section id="promoTab" class="page-tab">
+            <div class="promo-container">
+                <div class="promo-box hover-card">
+                    <i class="fa-solid fa-fire" style="font-size: 2.5rem; color: var(--gold); margin-bottom: 12px;"></i>
+                    <h3>Mã Giảm Giá 5% Đơn Đầu Tiên</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">Áp dụng giảm 5% cho <b>1 đơn bất kỳ</b>, dùng được <b>1 lần duy nhất / thiết bị</b>. Không áp dụng cho Acc Reg. Mã sẽ tự động được áp khi bạn mua acc.</p>
+                    <div id="discountCodeDisplay" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-weight: bold; color: var(--gold); margin-bottom: 15px;">Đang kiểm tra thiết bị...</div>
+                    <button class="btn-buy" onclick="claimDiscountCode()">Nhận Mã Giảm Giá</button>
+                </div>
+                <div class="promo-box hover-card">
+                    <i class="fa-solid fa-dharmachakra" style="font-size: 2.5rem; color: var(--accent-blue); margin-bottom: 12px;"></i>
+                    <h3>Vòng Quay May Mắn (Wheel Deal)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">Mỗi thiết bị được quay <b>1 lượt / tháng</b>, xác suất trúng phần thưởng lớn là <b>1/1000</b> (minh bạch, reset vào đầu tháng sau).</p>
+                    <div class="wheel-container">
+                        <div class="wheel-pointer"></div>
+                        <div class="wheel-circle" id="wheelCircle">
+                            <div class="wheel-slice slice-1"><span>10k</span></div>
+                            <div class="wheel-slice slice-2"><span>Giảm 5%</span></div>
+                            <div class="wheel-slice slice-3"><span>20k</span></div>
+                            <div class="wheel-slice slice-4"><span>Chúc May Mắn</span></div>
+                            <div class="wheel-slice slice-5"><span>Giảm 10%</span></div>
+                            <div class="wheel-slice slice-6"><span>Thẻ 50k</span></div>
+                        </div>
+                    </div>
+                    <button class="btn-submit pulse-anim" style="margin-top: 15px;" onclick="spinWheel()" id="promoSpinBtn">Quay Thưởng Ngay</button>
+                    <p id="promoWheelStatus" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;"></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB MỚI: ACC RANDOM FREE (quay nhận acc miễn phí, xác suất 1/1000, reset mỗi ngày) -->
+        <section id="randomTab" class="page-tab">
+            <div class="promo-container" style="grid-template-columns: 1fr; max-width: 480px; margin: 0 auto;">
+                <div class="promo-box hover-card">
+                    <i class="fa-solid fa-dice" style="font-size: 2.5rem; color: var(--gold); margin-bottom: 12px;"></i>
+                    <h3>Acc Random Free</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">
+                        Quay miễn phí, xác suất trúng acc là <b>1/1000</b>, minh bạch tuyệt đối. Mỗi thiết bị chỉ được quay
+                        <b>1 lần / ngày</b> (reset lúc 0h). Trúng thưởng là nhận thông tin acc ngay lập tức bên dưới.
+                    </p>
+                    <div class="wheel-container">
+                        <div class="wheel-pointer"></div>
+                        <div class="wheel-circle" id="freeWheelCircle">
+                            <div class="wheel-slice slice-1"><span>Chúc May Mắn</span></div>
+                            <div class="wheel-slice slice-2"><span>Chúc May Mắn</span></div>
+                            <div class="wheel-slice slice-3"><span>Trúng Acc!</span></div>
+                            <div class="wheel-slice slice-4"><span>Chúc May Mắn</span></div>
+                            <div class="wheel-slice slice-5"><span>Chúc May Mắn</span></div>
+                            <div class="wheel-slice slice-6"><span>Chúc May Mắn</span></div>
+                        </div>
+                    </div>
+                    <button class="btn-submit pulse-anim" style="margin-top: 15px;" onclick="spinFreeWheel()" id="freeSpinBtn">Quay Nhận Acc Free</button>
+                    <p id="freeSpinStatus" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;"></p>
+
+                    <!-- Hiển thị acc trúng thưởng (nếu có) minh bạch ngay tại đây -->
+                    <div id="freeAccPrizeBox" style="display:none; margin-top: 15px; text-align: left; background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 8px; padding: 12px;">
+                        <p style="color:#10b981; font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Chúc mừng! Bạn đã trúng acc:</p>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <img id="freeAccPrizeImg" src="" alt="Acc trúng thưởng" style="width:60px;height:60px;border-radius:8px;object-fit:cover;">
+                            <div>
+                                <div style="font-weight:bold;" id="freeAccPrizeName"></div>
+                                <div style="font-size:0.8rem; color: var(--text-muted);" id="freeAccPrizeCode"></div>
+                            </div>
+                        </div>
+                        <p style="font-size:0.85rem; margin-top:8px;" id="freeAccPrizeInfo"></p>
+                        <p style="font-size:0.8rem; color: var(--text-muted); margin-top:6px;" id="freeAccPrizeDesc"></p>
+                        <p style="font-size:0.8rem; margin-top:8px;">Liên hệ Zalo Admin ở tab Giới Thiệu để nhận bàn giao acc.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: GIỚI THIỆU (INTRO) -->
+        <section id="introTab" class="page-tab active">
+            <div class="intro-dual-grid">
+                <!-- Cột trái: Thẻ Profile Admin & Trình phát nhạc -->
+                <div class="intro-box text-left-box hover-card">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="site-logo admin-avatar-profile" id="introAvatarImg" alt="Avatar Admin" style="width: 60px; height: 60px;">
+                        <div>
+                            <h2 class="brand-title" style="font-size: 1.25rem;" id="introAdminTitle">J-HUSH / HUY ĐỨC</h2>
+                            <p style="font-size: 0.82rem; color: var(--text-muted);">Uy tín tạo nên thương hiệu</p>
+                        </div>
+                    </div>
+
+                    <!-- Nội dung giới thiệu -->
+                    <div class="intro-text-content" id="displayIntroText">
+                        Chào cả nhà. Shop mk là buôn của các ad lớn (ad Công, Trâm ...vv) cọc ut và có ctv hơn 50 group.<br>
+                        - Mk buôn lên tương tác rộng ae nào cần tìm gì cứ ib mk 📩<br>
+                        - Có cân tg có check ut<br>
+                        - Hỗ trợ góp, tìm và lên đời acc (thuê acc trọn đời) 🔥<br>
+                        - Ae vào thì nhớ để mk một slot +kèo cân hết luôn 🥰<br>
+                        - Các dịch vụ khác liqi và ff<br><br>
+                        <b>Lưu ý: Hãy là người gd thông minh 🫰</b><br>
+                        Theo dõi đồng hành cùng mk trên nền tảng khác nhớ...
+                    </div>
+                    
+                    <!-- Trình phát nhạc nền tùy chỉnh -->
+                    <div class="music-player-box">
+                        <audio id="bgAudio" loop></audio>
+                        <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                            <button class="btn-play-custom" id="btnPlayMusic" onclick="togglePlayMusic()"><i class="fa-solid fa-play"></i> Phát/Tạm dừng nhạc</button>
+                        </div>
+                        <div class="progress-container" onclick="seekAudio(event)">
+                            <div class="progress-bar" id="audioProgressBar"></div>
+                        </div>
+                        <div class="time-display" id="audioTimeDisplay">0:00</div>
+                    </div>
+                </div>
+
+                <!-- Cột phải: Thông tin liên kết mạng xã hội chính thức -->
+                <div class="intro-box hover-card" style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;"><i class="fa-solid fa-share-nodes" style="color: var(--gold);"></i> Kênh Kết Nối Chính Thức</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Giao dịch trực tiếp qua các nền tảng sau của Shop:</p>
+                    
+                    <div class="social-links-grid" style="grid-template-columns: 1fr; gap: 15px;">
+                        <a href="#" id="socialTiktok" target="_blank" class="social-hover-btn tiktok"><i class="fa-brands fa-tiktok"></i> TikTok</a>
+                        <a href="#" id="socialYoutube" target="_blank" class="social-hover-btn youtube"><i class="fa-brands fa-youtube"></i> YouTube</a>
+                        <a href="#" id="socialZalo" target="_blank" class="social-hover-btn zalo"><i class="fa-solid fa-comment-sms"></i> Zalo Hỗ Trợ</a>
+                        <a href="#" id="socialFacebook" class="social-hover-btn facebook"><i class="fa-brands fa-facebook"></i> Facebook</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: LỰA ACC CÓ SẴN (SHOP) -->
+        <section id="shopTab" class="page-tab">
+            <div class="filter-section">
+                <input type="text" id="searchInput" class="filter-input" placeholder="Tìm theo tên acc hoặc mã số (VD: JH-01)..." onkeyup="filterAccounts()">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: -8px 0 8px;">Lọc theo mức giá:</p>
+                <div class="preset-buttons">
+                    <button class="btn-preset active" data-filter-group="price" onclick="setPriceFilter('all', this)">Tất cả</button>
+                    <button class="btn-preset" data-filter-group="price" onclick="setPriceFilter('cheap', this)">&lt; 100k</button>
+                    <button class="btn-preset" data-filter-group="price" onclick="setPriceFilter('mid', this)">100k - 500k</button>
+                    <button class="btn-preset" data-filter-group="price" onclick="setPriceFilter('high', this)">500k - 2Tr</button>
+                    <button class="btn-preset" data-filter-group="price" onclick="setPriceFilter('expensive', this)">&gt; 2Tr</button>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 12px 0 8px;">Lọc theo loại acc:</p>
+                <div class="preset-buttons">
+                    <button class="btn-preset active" data-filter-group="type" onclick="setTypeFilter('all', this)">Tất cả loại</button>
+                    <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('reg', this)">Acc Reg</button>
+                    <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('vip', this)">Acc VIP</button>
+                    <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('ttx', this)">Acc TTX</button>
+                </div>
+            </div>
+
+            <!-- Lưới hiển thị tài khoản kèm trạng thái Đang bán / Đã bán / Bị ban -->
+            <div class="acc-grid" id="accountGrid"></div>
+        </section>
+
+        <!-- TAB 4: ĐĂNG KÍ MUA ACC (FORM) -->
+        <section id="formTab" class="page-tab">
+            <div class="admin-box hover-card" style="max-width: 800px; margin: 0 auto; text-align: center;">
+                <h3 style="margin-bottom: 12px;"><i class="fa-solid fa-file-pen"></i> Đăng Kí & Yêu Cầu Tìm Acc Theo Yêu Cầu</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">Điền thông tin trực tiếp qua biểu mẫu Google Forms bên dưới hoặc mở sang tab riêng.</p>
+                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <iframe src="https://forms.gle/6NByVm7rVJYNGvcEA" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" allowfullscreen>Đang tải...</iframe>
+                </div>
+                <a href="https://docs.google.com/forms/" target="_blank" class="btn-submit" style="display: inline-block; margin-top: 20px; text-decoration: none;">Mở Biểu Mẫu Trực Tuyến Nền Tảng Gốc</a>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Thanh Toán QR Tự Động -->
+    <div class="modal-overlay" id="buyModal">
+        <div class="modal-card animate-pop">
+            <button class="btn-close-modal" onclick="closeModal()">&times;</button>
+            <h3 style="margin-bottom: 10px;"><i class="fa-solid fa-circle-info"></i> Thông Tin Acc</h3>
+
+            <!-- Thông tin acc và mô tả acc tách riêng biệt, không gộp chung -->
+            <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2px;">Thông tin nhanh</div>
+                <div id="modalAccInfo" style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px;">—</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2px;">Mô tả chi tiết</div>
+                <div id="modalAccDesc" style="font-size: 0.85rem; color: var(--text-muted);">—</div>
+            </div>
+
+            <h3 style="margin-bottom: 10px;"><i class="fa-solid fa-qrcode"></i> Thanh Toán Tự Động Qua QR</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Quét mã QR bên dưới để thanh toán. Cú pháp chuyển khoản tự động kèm theo mã:</p>
+
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 12px; text-align: center;">
+                <img id="modalQrImg" src="" alt="QR Ngân Hàng" style="width: 180px; height: 180px; object-fit: contain; border-radius: 6px; background: white; padding: 5px;">
+                <div style="margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: var(--gold);" id="modalSyntaxCode">Nội dung CK: Mua JH-01</div>
+            </div>
+
+            <div id="modalDiscountNote" style="display:none; font-size: 0.82rem; color: #10b981; margin-bottom: 10px;">
+                <i class="fa-solid fa-tags"></i> Đã áp dụng mã giảm giá 5% (chỉ dùng được 1 lần / thiết bị).
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                <span id="modalAccCode" style="font-size: 0.85rem; color: var(--gold); font-weight: bold;">JH-01</span>
+                <span style="text-align:right;">
+                    <span id="modalOriginalPrice" style="display:none; color: var(--text-muted); text-decoration: line-through; font-size: 0.85rem; margin-right: 6px;"></span>
+                    <span id="modalAccPrice" style="color: #22c55e; font-weight: 800; font-size: 1.15rem;">0đ</span>
+                </span>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;"><i class="fa-solid fa-triangle-exclamation"></i> Vui lòng chuyển khoản đúng số tiền và nội dung ghi trên để được xử lý tự động.</p>
+            <button class="btn-submit" onclick="confirmPaymentZalo()">Xác Nhận Đã Chuyển & Gửi Zalo Admin</button>
+        </div>
+    </div>
+
+    <!-- Chân Trang Footer -->
+    <footer class="site-footer">
+        <p>&copy; 2026 Shop J-Hush. Hotline/Zalo hỗ trợ: 0362062410.</p>
+        <div class="footer-socials">
+            <a href="#" onclick="switchTab('promoTab', document.querySelectorAll('.nav-link')[0])">Ưu Đãi</a>
+            <a href="#" onclick="switchTab('randomTab', document.querySelectorAll('.nav-link')[1])">Acc Random Free</a>
+            <a href="#" onclick="switchTab('introTab', document.querySelectorAll('.nav-link')[2])">Giới Thiệu</a>
+            <a href="#" onclick="switchTab('shopTab', document.querySelectorAll('.nav-link')[3])">Lựa Acc</a>
+            <a href="#" onclick="switchTab('formTab', document.querySelectorAll('.nav-link')[4])">Đăng Kí</a>
+            <a href="admin.html">Quản Trị</a>
+        </div>
+    </footer>
+
+    <!-- JavaScript Tùy Chỉnh -->
+    <script src="data.js" defer></script>
+    <script src="script.js" defer></script>
+</body>
+</html>

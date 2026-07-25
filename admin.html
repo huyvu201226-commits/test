@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Quản Trị Hệ Thống - Shop J-Hush</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS Tùy Chỉnh -->
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-wrapper { max-width: 1000px; margin: 30px auto; padding: 0 15px; }
+        .admin-section { background: var(--bg-card); border: 1px solid var(--card-border); border-radius: 12px; padding: 25px; margin-bottom: 25px; }
+        .form-control { width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 6px; color: var(--text-main); margin-bottom: 12px; }
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
+        th { color: var(--gold); }
+        .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
+        .badge-hacked { background: #f97316; color: #1a1200; }
+        .btn-sm { padding: 6px 10px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; margin: 2px; }
+        .btn-edit { background: var(--accent-blue); color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+        .btn-lock { background: #f97316; color: #1a1200; }
+        .btn-unlock { background: #10b981; color: white; }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-main); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+        .admin-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--card-border); }
+        .field-hint { font-size: 0.78rem; color: var(--text-muted); margin: -6px 0 12px; }
+        .upload-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .preview-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 1px solid var(--gold); }
+        .btn-reset-media { background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text-main); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+        .subsection-title { font-size: 0.95rem; color: var(--gold); margin: 20px 0 10px; border-top: 1px solid var(--card-border); padding-top: 18px; }
+        .subsection-title:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+        .log-empty { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 15px; }
+        .log-action { font-weight: bold; color: var(--gold); }
+        .form-msg { font-size: 0.82rem; margin: -6px 0 12px; min-height: 1em; }
+        .form-msg.error { color: #ef4444; }
+        .form-msg.success { color: #10b981; }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+
+        /* Responsive: màn hình nhỏ (điện thoại) dồn các cột về 1 cột để không bị vỡ giao diện */
+        @media (max-width: 600px) {
+            .admin-wrapper { margin: 15px auto; padding: 0 12px; }
+            .admin-section { padding: 18px; }
+            .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; gap: 0; }
+            .upload-row { grid-template-columns: 1fr; }
+            .upload-row .preview-avatar,
+            .upload-row .btn-reset-media { margin-top: 8px; }
+            table, thead, tbody, th, td, tr { font-size: 0.82rem; }
+            .btn-sm { padding: 6px 8px; font-size: 0.75rem; }
+            th, td { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Màn hình đăng nhập Quản trị -->
+    <div class="login-overlay" id="adminLoginBox">
+        <div class="welcome-card animate-pop">
+            <h2 class="brand-title" style="margin-bottom: 15px;"><i class="fa-solid fa-shield-halved"></i> Đăng Nhập Quản Trị</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Nhập mật khẩu quản trị viên để tiếp tục quản lý hệ thống.</p>
+            <input type="password" id="adminPasswordInput" class="form-control" placeholder="Mật khẩu (Mặc định: admin123)">
+            <div class="form-msg error" id="loginMsg"></div>
+            <button class="btn-submit" onclick="verifyAdminPassword()">Truy Cập Trang Quản Trị</button>
+            <a href="index.html" style="display: block; margin-top: 15px; color: var(--text-muted); font-size: 0.85rem; text-decoration: none;">&larr; Quay lại trang chủ Shop</a>
+        </div>
+    </div>
+
+    <!-- Thanh Điều Hướng Quản Trị -->
+    <header class="top-navbar">
+        <div class="nav-left">
+            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="site-logo" id="adminNavLogo" alt="Logo">
+            <span class="brand-title">Bảng Điều Khiển Quản Trị J-Hush</span>
+        </div>
+        <div class="nav-right">
+            <a href="index.html" class="nav-link"><i class="fa-solid fa-house"></i> Về Trang Chủ</a>
+            <button class="btn-theme-toggle" onclick="logoutAdmin()"><i class="fa-solid fa-right-from-bracket"></i> Đăng Xuất</button>
+        </div>
+    </header>
+
+    <div class="admin-wrapper">
+
+        <!-- Phần 1: Quản lý Kho Tài khoản (Thêm / Sửa / Xóa / Cập nhật trạng thái / Khóa nghi hack) -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-store" style="color: var(--gold);"></i> Quản Lý Tài Khoản Game & Hoạt Động Bất Thường</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Thêm mới, cập nhật trạng thái, hoặc khóa nhanh các tài khoản có dấu hiệu bị hack / hoạt động đáng ngờ.</p>
+
+            <form id="accForm" onsubmit="saveAccount(event)">
+                <input type="hidden" id="editIndex" value="-1">
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mã Số Acc (VD: JH-05)</label>
+                        <input type="text" id="accCodeInput" class="form-control" required placeholder="JH-05">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Acc</label>
+                        <input type="text" id="accNameInput" class="form-control" required placeholder="Acc Vip...">
+                    </div>
+                </div>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Thông Tin Nhanh (VD: rank, số tướng/skin — hiển thị ngay ở thẻ acc)</label>
+                <input type="text" id="accInfoInput" class="form-control" placeholder="VD: 50 tướng, Rank Cao Thủ">
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả Chi Tiết (hiển thị riêng trong khung mua acc)</label>
+                <textarea id="accDescInput" class="form-control" rows="3" placeholder="Mô tả chi tiết về acc: tình trạng bảo mật, cam kết, hỗ trợ..."></textarea>
+
+                <div class="form-grid-3">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Giá Tiền (VNĐ)</label>
+                        <input type="number" id="accPriceInput" class="form-control" required placeholder="150000">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mức Giá Lọc (Danh mục)</label>
+                        <select id="accCategoryInput" class="form-control">
+                            <option value="cheap">&lt; 100k</option>
+                            <option value="mid">100k - 500k</option>
+                            <option value="high">500k - 2Tr</option>
+                            <option value="expensive">&gt; 2Tr</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Trạng Thái</label>
+                        <select id="accStatusInput" class="form-control">
+                            <option value="selling">Đang bán</option>
+                            <option value="sold">Đã bán</option>
+                            <option value="banned">Bị ban (game khóa)</option>
+                            <option value="hacked">Nghi ngờ hack - Đã khóa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Loại Acc (dùng để khách lọc theo loại + áp quy tắc mã giảm giá)</label>
+                <select id="accTypeInput" class="form-control">
+                    <option value="reg">Acc Reg (không được áp mã giảm 5%)</option>
+                    <option value="vip">Acc VIP</option>
+                    <option value="ttx">Acc TTX</option>
+                </select>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Link Hình Ảnh Minh Họa (hoặc tải ảnh từ máy bên dưới)</label>
+                <input type="url" id="accImgInput" class="form-control" placeholder="https://images.unsplash.com/...">
+
+                <div class="upload-row">
+                    <input type="file" id="accImgFileInput" class="form-control" accept="image/*" style="margin-bottom:0;">
+                    <button type="button" class="btn-reset-media" onclick="clearAccImageUpload()">Bỏ ảnh tải lên</button>
+                </div>
+                <p class="field-hint">Nếu chọn ảnh từ máy, ảnh sẽ được ưu tiên dùng thay cho link ở trên (ảnh lưu ngay trên trình duyệt, không cần server).</p>
+
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Lưu Tài Khoản</button>
+            </form>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ảnh</th>
+                            <th>Mã</th>
+                            <th>Tên Acc</th>
+                            <th>Loại</th>
+                            <th>Giá</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminAccTableBody">
+                        <!-- Danh sách động nạp vào đây -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Phần 1B: Quản lý Kho Acc Random Free (tặng miễn phí khi khách quay trúng 1/1000 mỗi ngày) -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-gift" style="color: var(--gold);"></i> Kho Acc Random Free (Quay Trúng Nhận Ngay)</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                Danh sách acc dùng để tặng ở trang <b>Acc Random Free</b>. Mỗi thiết bị được quay 1 lần/ngày,
+                xác suất trúng 1/1000. Acc đã được trao (claimed) sẽ không bị trao lại cho lượt quay khác — hãy
+                thường xuyên bổ sung acc mới vào kho.
+            </p>
+
+            <form id="freeAccForm" onsubmit="saveFreeAccount(event)">
+                <input type="hidden" id="freeEditIndex" value="-1">
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mã Số Acc (VD: FREE-03)</label>
+                        <input type="text" id="freeCodeInput" class="form-control" required placeholder="FREE-03">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Acc</label>
+                        <input type="text" id="freeNameInput" class="form-control" required placeholder="Acc Reg...">
+                    </div>
+                </div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Thông Tin Nhanh</label>
+                <input type="text" id="freeInfoInput" class="form-control" placeholder="VD: Rank Vàng, vài skin">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả Chi Tiết</label>
+                <textarea id="freeDescInput" class="form-control" rows="2" placeholder="Mô tả chi tiết acc tặng..."></textarea>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Link Hình Ảnh Minh Họa</label>
+                <input type="url" id="freeImgInput" class="form-control" placeholder="https://images.unsplash.com/...">
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Lưu Acc Free</button>
+            </form>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ảnh</th>
+                            <th>Mã</th>
+                            <th>Tên Acc</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminFreeAccTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Phần 2: Nhật Ký Hoạt Động (khóa/mở khóa/xóa/sửa...) -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-clock-rotate-left" style="color: var(--gold);"></i> Nhật Ký Hoạt Động Tài Khoản</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Lịch sử các thao tác quản trị: khóa nghi hack, mở khóa, thêm/sửa/xóa acc, đổi mật khẩu...</p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 170px;">Thời Gian</th>
+                            <th style="width: 160px;">Hành Động</th>
+                            <th>Chi Tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activityLogTableBody"></tbody>
+                </table>
+            </div>
+            <button class="btn-sm btn-delete" style="margin-top: 12px;" onclick="handleClearLog()">Xóa Toàn Bộ Nhật Ký</button>
+        </div>
+
+        <!-- Phần 3: Cài Đặt Hệ Thống Thông Tin Chung, Logo, Avatar & Âm Thanh -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-gear" style="color: var(--gold);"></i> Cấu Hình Giao Diện & Âm Thanh Hệ Thống</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Thay đổi thông tin giới thiệu, logo shop, ảnh admin, mạng xã hội và nhạc nền.</p>
+
+            <form id="settingsForm" onsubmit="saveGlobalSettings(event)">
+
+                <div class="subsection-title">Thông Tin Chung</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Tên Admin (Tab Giới Thiệu)</label>
+                <input type="text" id="settingAdminTitle" class="form-control" required>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Nội Dung Giới Thiệu (Hỗ trợ HTML cơ bản như &lt;br&gt;, &lt;b&gt;)</label>
+                <textarea id="settingIntroText" class="form-control" rows="5" required></textarea>
+
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tên Ngân Hàng (VietQR)</label>
+                        <input type="text" id="settingBankName" class="form-control" required placeholder="MB">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Số Tài Khoản Nhận Tiền</label>
+                        <input type="text" id="settingBankAcc" class="form-control" required placeholder="0362062410">
+                    </div>
+                </div>
+
+                <div class="subsection-title">Ảnh QR Thanh Toán</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tải Ảnh QR Từ Thiết Bị (ưu tiên dùng thay cho QR tự sinh ở trên nếu có)</label>
+                <div class="upload-row">
+                    <input type="file" id="settingQrFile" class="form-control" accept="image/*" style="margin-bottom:0;">
+                    <img id="qrPreview" class="preview-avatar" style="border-radius: 6px;" alt="Xem trước QR">
+                </div>
+                <button type="button" class="btn-reset-media" onclick="resetMediaField('qrImageUrl')">Bỏ ảnh QR đã tải (dùng lại QR tự động)</button>
+                <p class="field-hint">Khi khách bấm mua acc, hệ thống vẫn tự động ghi rõ nội dung chuyển khoản (mã acc) và số tiền cần thanh toán bên dưới ảnh QR này.</p>
+
+                <div class="subsection-title">Logo Shop &amp; Ảnh Đại Diện Admin</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Logo Shop (hiển thị ở thanh menu &amp; màn chào)</label>
+                <div class="upload-row">
+                    <input type="file" id="settingLogoFile" class="form-control" accept="image/*" style="margin-bottom:0;">
+                    <img id="logoPreview" class="preview-avatar" alt="Xem trước logo">
+                </div>
+                <button type="button" class="btn-reset-media" onclick="resetMediaField('logoUrl')">Khôi phục logo mặc định</button>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted); margin-top: 15px; display:block;">Ảnh Đại Diện Admin (tab Giới Thiệu)</label>
+                <div class="upload-row">
+                    <input type="file" id="settingAvatarFile" class="form-control" accept="image/*" style="margin-bottom:0;">
+                    <img id="avatarPreview" class="preview-avatar" alt="Xem trước avatar">
+                </div>
+                <button type="button" class="btn-reset-media" onclick="resetMediaField('avatarUrl')">Khôi phục ảnh đại diện mặc định</button>
+
+                <div class="subsection-title">Nhạc Nền</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Đường Dẫn Tệp Nhạc Nền (.mp3 trực tiếp)</label>
+                <input type="url" id="settingAudioUrl" class="form-control" placeholder="https://...">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Hoặc Tải Tệp Nhạc Từ Thiết Bị (ưu tiên dùng nếu có)</label>
+                <div class="upload-row">
+                    <input type="file" id="settingAudioFile" class="form-control" accept="audio/*" style="margin-bottom:0;">
+                    <button type="button" class="btn-reset-media" onclick="resetMediaField('audioUrl')">Bỏ nhạc đã tải lên</button>
+                </div>
+                <p class="field-hint">Tệp nhạc tải lên được lưu ngay trên trình duyệt của bạn (IndexedDB), không giới hạn ~5MB như cách lưu cũ.</p>
+
+                <div class="subsection-title">Liên Kết Mạng Xã Hội</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">TikTok</label>
+                <input type="url" id="settingSocialTiktok" class="form-control" placeholder="https://www.tiktok.com/@...">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">YouTube</label>
+                <input type="url" id="settingSocialYoutube" class="form-control" placeholder="https://www.youtube.com/channel/...">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Zalo</label>
+                <input type="url" id="settingSocialZalo" class="form-control" placeholder="https://zalo.me/0362062410">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Facebook (để trống nếu tạm khóa, chưa dùng)</label>
+                <input type="url" id="settingSocialFacebook" class="form-control" placeholder="https://facebook.com/...">
+
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px; margin-top: 10px;">Cập Nhật Cấu Hình</button>
+            </form>
+        </div>
+
+        <!-- Phần 4: Đổi Mật Khẩu Quản Trị -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-key" style="color: var(--gold);"></i> Đổi Mật Khẩu Quản Trị</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Mật khẩu được băm (SHA-256) trước khi lưu, không còn lưu ở dạng chữ thường trong mã nguồn.</p>
+            <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mật Khẩu Hiện Tại</label>
+                <input type="password" id="currentPasswordInput" class="form-control" required>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mật Khẩu Mới (tối thiểu 6 ký tự)</label>
+                <input type="password" id="newPasswordInput" class="form-control" required minlength="6">
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Xác Nhận Mật Khẩu Mới</label>
+                <input type="password" id="confirmPasswordInput" class="form-control" required minlength="6">
+                <div class="form-msg" id="changePasswordMsg"></div>
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Đổi Mật Khẩu</button>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- Script Quản Trị: tách riêng ra data.js (dùng chung) + admin.js để dễ bảo trì và cache trình duyệt -->
+    <script src="data.js" defer></script>
+    <script src="admin.js" defer></script>
+</body>
+</html>
