@@ -289,6 +289,14 @@ function uploadBufferToGridFS(buffer, filename, contentType) {
 }
 
 // Trả về file đã lưu trong GridFS theo id (dùng để hiển thị ảnh/phát nhạc trên trình duyệt)
+//
+// QUAN TRỌNG (fix lỗi không phát được nhạc trên điện thoại): trước đây route này luôn
+// trả về TOÀN BỘ file với status 200, không hỗ trợ HTTP Range request. Trình duyệt trên
+// PC thường vẫn phát được vì chịu tải cả file, nhưng Safari trên iPhone/iPad (và nhiều
+// trình duyệt di động khác) BẮT BUỘC server phải hỗ trợ Range (trả 206 Partial Content)
+// mới cho phép thẻ <audio>/<video> phát — nếu không, thẻ audio coi như không thể phát
+// (không báo lỗi rõ ràng, chỉ im lặng không chạy). Giờ route trả lời đúng Range request
+// để nhạc nền phát được trên mọi thiết bị, đồng thời hỗ trợ tua (seek) mượt hơn.
 app.get('/files/:id', async (req, res) => {
     let objectId;
     try {
@@ -301,11 +309,40 @@ app.get('/files/:id', async (req, res) => {
         const files = await gridBucket.find({ _id: objectId }).toArray();
         if (!files.length) return res.status(404).end();
 
-        res.set('Content-Type', files[0].contentType || 'application/octet-stream');
+        const file = files[0];
+        const fileSize = file.length;
+        const contentType = file.contentType || 'application/octet-stream';
+        const range = req.headers.range;
+
         res.set('Cache-Control', 'public, max-age=604800'); // cache 7 ngày trên trình duyệt
-        gridBucket.openDownloadStream(objectId)
-            .on('error', () => res.status(404).end())
-            .pipe(res);
+        res.set('Accept-Ranges', 'bytes');
+        res.set('Content-Type', contentType);
+
+        if (range) {
+            const match = /bytes=(\d*)-(\d*)/.exec(range);
+            const start = match && match[1] ? parseInt(match[1], 10) : 0;
+            const end = match && match[2] ? parseInt(match[2], 10) : fileSize - 1;
+
+            if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+                res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
+                return;
+            }
+
+            const safeEnd = Math.min(end, fileSize - 1);
+
+            res.status(206);
+            res.set('Content-Range', `bytes ${start}-${safeEnd}/${fileSize}`);
+            res.set('Content-Length', safeEnd - start + 1);
+
+            gridBucket.openDownloadStream(objectId, { start, end: safeEnd + 1 })
+                .on('error', () => { if (!res.headersSent) res.status(404).end(); else res.end(); })
+                .pipe(res);
+        } else {
+            res.set('Content-Length', fileSize);
+            gridBucket.openDownloadStream(objectId)
+                .on('error', () => { if (!res.headersSent) res.status(404).end(); else res.end(); })
+                .pipe(res);
+        }
     } catch (err) {
         res.status(500).end();
     }

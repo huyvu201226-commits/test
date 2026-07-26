@@ -135,34 +135,47 @@ function applySocialLinks(links) {
 }
 
 // Xử lý màn hình chào mừng (Mở trang & Phát nhạc)
-// LƯU Ý: trên điện thoại, trình duyệt chỉ cho phép audio.play() chạy khi được gọi ngay
-// trong lúc xử lý cử chỉ chạm của người dùng. Trước đây hàm này kiểm tra audio.src ngay lập
-// tức — nếu cấu hình (nhạc nền) chưa kịp tải xong (mạng di động thường chậm hơn), audio.src
-// vẫn rỗng nên play() không làm gì, và không có cơ hội thử lại => vào bằng điện thoại
-// thường xuyên bị mất tiếng. Giờ hàm đợi nốt phần cấu hình đang tải (nếu còn dang dở) trước
-// khi gán src & phát, để không bỏ lỡ nhạc chỉ vì tải chậm.
-async function enterWebsite() {
+// NGUYÊN NHÂN GỐC (đã tìm ra): hàm này trước đây là async và có "await clientDataReadyPromise"
+// TRƯỚC KHI gọi audio.play(). Trên di động — đặc biệt iOS Safari, và cả nhiều bản Chrome Android
+// mới — trình duyệt chỉ cho phép play() chạy nếu nó được gọi ĐỒNG BỘ, ngay trong đúng thao tác
+// chạm của người dùng (click handler). Chỉ cần có 1 "await" (dù chỉ đợi 1 microtask) xen giữa là
+// trình duyệt coi thao tác chạm đã "nguội" và tự ý chặn play() — không báo lỗi rõ ràng, chỉ bị
+// nuốt âm thầm trong .catch(). Đây là nguyên nhân chính khiến điện thoại thường xuyên mất tiếng.
+// CÁCH SỬA: gọi audio.play() NGAY LẬP TỨC, đồng bộ, ngay khi hàm được gọi từ onclick — không await
+// trước đó. Nếu lúc này audio.src chưa kịp có (mạng chậm, settings chưa tải xong), mới đợi tải
+// xong rồi thử lại — lần thử lại này có thể bị vài trình duyệt di động chặn (không còn đúng thao
+// tác chạm), nhưng đó là trường hợp hiếm hơn nhiều so với lỗi mất tiếng thường trực trước đây.
+function enterWebsite() {
     const overlay = document.getElementById('welcomeOverlay');
     if (overlay) overlay.classList.add('hidden');
 
     const audio = document.getElementById('bgAudio');
     if (!audio) return;
 
-    if (clientDataReadyPromise) {
-        try { await clientDataReadyPromise; } catch (e) { /* lỗi tải dữ liệu đã được báo ở nơi khác */ }
-    }
-
-    if (!audio.src) {
-        const audioSrc = resolveMediaSrc(getSettings().audioUrl, '');
-        if (audioSrc) audio.src = audioSrc;
-    }
-
-    if (audio.src) {
+    const tryPlay = () => {
+        if (!audio.src) return false;
         audio.play().then(() => {
             isPlayingMusic = true;
             const btn = document.getElementById('btnPlayMusic');
             if (btn) btn.innerHTML = '<i class="fa-solid fa-pause"></i> Đang phát nhạc...';
         }).catch(e => console.log("Trình duyệt chặn autoplay âm thanh:", e));
+        return true;
+    };
+
+    // Gọi ngay, đồng bộ, trong đúng thao tác chạm — ưu tiên trường hợp phổ biến (src đã có sẵn).
+    if (tryPlay()) return;
+
+    // audio.src chưa có (dữ liệu/settings còn đang tải) — đợi tải xong rồi thử lại.
+    if (clientDataReadyPromise) {
+        clientDataReadyPromise
+            .catch(() => { /* lỗi tải dữ liệu đã được báo ở nơi khác */ })
+            .then(() => {
+                if (!audio.src) {
+                    const audioSrc = resolveMediaSrc(getSettings().audioUrl, '');
+                    if (audioSrc) audio.src = audioSrc;
+                }
+                tryPlay();
+            });
     }
 }
 
