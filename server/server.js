@@ -9,6 +9,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -214,6 +216,30 @@ function getDeviceState(code) {
 // App
 // ------------------------------------------------------------
 const app = express();
+
+// ------------------------------------------------------------
+// Bảo mật cơ bản (helmet): thêm các HTTP header chống clickjacking, chặn dò MIME-type,
+// bật HSTS... LƯU Ý: tắt hẳn Content-Security-Policy và Cross-Origin-Embedder-Policy vì
+// toàn bộ giao diện đang dùng onclick="..." nội tuyến + nạp CSS/font từ cdnjs.cloudflare.com
+// + nhúng iframe Google Form — bật CSP mặc định của helmet sẽ chặn ÂM THẦM tất cả các nút bấm
+// và tài nguyên ngoài này (đúng kiểu lỗi "không báo gì, chỉ im lặng không chạy" đã gặp trước đó).
+// Muốn bật CSP chặt hơn, cần chuyển toàn bộ onclick sang addEventListener trước.
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+}));
+
+// Giới hạn số lần thử đăng nhập: chống dò mật khẩu (brute-force) trên 2 route đăng nhập.
+// Tối đa 10 lần/15 phút cho mỗi IP — vượt quá sẽ bị chặn tạm thời, không tính vào các API khác
+// (VD: đồng bộ nhạc, tải dữ liệu Shop) để tránh chặn nhầm khách hàng bình thường.
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Thử đăng nhập quá nhiều lần, vui lòng đợi ít phút rồi thử lại.' }
+});
+
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
@@ -472,7 +498,7 @@ app.post('/api/events/:id/spin', (req, res) => {
 
 // ===================== ĐĂNG NHẬP ADMIN =====================
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', loginLimiter, (req, res) => {
     const { password } = req.body || {};
     ensureAdminPasswordInitialized();
     const hash = hashPassword(password || '', db.settings.adminPasswordSalt);
@@ -669,7 +695,7 @@ app.delete('/api/admin/collaborators/:id', requireAdmin, (req, res) => {
 });
 
 // Đăng nhập CTV — trang riêng ctv.html, chỉ cấp quyền quản lý Kho Tài Khoản Bán
-app.post('/api/collaborator/login', (req, res) => {
+app.post('/api/collaborator/login', loginLimiter, (req, res) => {
     ensureCollaboratorsInitialized();
     const { username, password } = req.body || {};
     const uname = String(username || '').trim();
