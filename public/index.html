@@ -19,7 +19,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS Tùy Chỉnh -->
-    <link rel="stylesheet" href="style.css?v=20260727b">
+    <link rel="stylesheet" href="style.css?v=20260728a">
 </head>
 <body>
 
@@ -284,7 +284,14 @@
     </footer>
 
     <!-- JavaScript Tùy Chỉnh -->
-    <script src="data.js?v=20260727b" defer></script>
-    <script src="script.js?v=20260727b" defer></script>
+    <!-- Lightbox xem ảnh acc phóng to — mở khi bấm vào ảnh trong lưới Shop -->
+    <div class="img-lightbox" id="imgLightbox" onclick="closeImgLightboxIfBackdrop(event)">
+        <button class="lightbox-close-btn" onclick="closeImgLightbox()" aria-label="Đóng ảnh"><i class="fa-solid fa-xmark"></i></button>
+        <img id="lightboxImg" src="" alt="Ảnh acc phóng to" onclick="toggleLightboxZoom(event)">
+        <div class="lightbox-hint">Bấm vào ảnh để phóng to/thu nhỏ · Bấm ra ngoài để đóng</div>
+    </div>
+
+    <script src="data.js?v=20260728a" defer></script>
+    <script src="script.js?v=20260728a" defer></script>
 </body>
 </html>

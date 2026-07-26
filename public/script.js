@@ -538,11 +538,54 @@ function bindShopGridEvents() {
     const grid = document.getElementById('accountGrid');
     if (!grid) return;
     grid.addEventListener('click', (e) => {
+        const img = e.target.closest('.acc-img-wrap img');
+        if (img) { openImgLightbox(img.src, img.alt); return; }
+
         const btn = e.target.closest('.btn-action-acc');
         if (!btn || btn.disabled) return;
         openBuyModal(btn.dataset.code);
     });
 }
+
+// ------------------------------------------------------------
+// Lightbox xem ảnh acc phóng to: bấm vào ảnh trong lưới Shop để xem chi tiết, bấm vào
+// ảnh trong lightbox để phóng to/thu nhỏ (bấm lần nữa để thu về vừa khung), bấm ra
+// ngoài ảnh hoặc nút "x" để đóng. Trên di động vẫn dùng pinch-to-zoom 2 ngón tay được
+// như bình thường vì viewport không khoá user-scalable.
+// ------------------------------------------------------------
+function openImgLightbox(src, alt) {
+    const overlay = document.getElementById('imgLightbox');
+    const img = document.getElementById('lightboxImg');
+    if (!overlay || !img || !src) return;
+    img.src = src;
+    img.alt = alt || 'Ảnh acc phóng to';
+    img.classList.remove('zoomed');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden'; // khoá cuộn trang nền trong lúc xem ảnh
+}
+
+function closeImgLightbox() {
+    const overlay = document.getElementById('imgLightbox');
+    const img = document.getElementById('lightboxImg');
+    if (overlay) overlay.classList.remove('active');
+    if (img) { img.classList.remove('zoomed'); img.src = ''; }
+    document.body.style.overflow = '';
+}
+
+// Chỉ đóng khi bấm đúng vào lớp nền (backdrop), không đóng khi bấm vào ảnh hay nút đóng
+function closeImgLightboxIfBackdrop(event) {
+    if (event.target.id === 'imgLightbox') closeImgLightbox();
+}
+
+function toggleLightboxZoom(event) {
+    event.stopPropagation();
+    const img = document.getElementById('lightboxImg');
+    if (img) img.classList.toggle('zoomed');
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeImgLightbox();
+});
 
 // Bộ lọc tìm kiếm, mức giá và loại acc — 3 điều kiện độc lập, kết hợp với nhau (AND)
 let currentPriceFilter = 'all';
