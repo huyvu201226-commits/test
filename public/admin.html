@@ -171,6 +171,52 @@
             </div>
         </div>
 
+        <!-- Phần 1A2: Quản Lý Cộng Tác Viên (CTV) — chỉ Admin mới tạo/xóa được CTV.
+             CTV đăng nhập ở trang riêng ctv.html, chỉ được quyền quản lý Kho Tài Khoản Bán ở trên. -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-user-group" style="color: var(--gold);"></i> Quản Lý Cộng Tác Viên (CTV)</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                Tạo tài khoản đăng nhập cho cộng tác viên tại <b>trang riêng ctv.html</b> — CTV chỉ được quyền
+                thêm/sửa/xóa/khóa trong <b>Kho Tài Khoản Bán</b> ở trên, không xem/sửa được cấu hình hệ thống,
+                sự kiện, nhật ký hay đổi mật khẩu Admin. Chỉ Admin mới tạo và xóa được tài khoản CTV.
+            </p>
+
+            <form id="ctvForm" onsubmit="createCollaborator(event)">
+                <div class="subsection-title" style="margin-top:0; padding-top:0; border-top:none;">Khung 1 — Tài Khoản Cấp Cho CTV</div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tên Đăng Nhập CTV</label>
+                        <input type="text" id="ctvUsernameInput" class="form-control" required placeholder="VD: ctv01">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mật Khẩu Cấp Cho CTV (tối thiểu 6 ký tự)</label>
+                        <input type="password" id="ctvPasswordInput" class="form-control" required minlength="6">
+                    </div>
+                </div>
+                <p class="field-hint">Đây là tài khoản/mật khẩu bạn sẽ gửi cho CTV để họ đăng nhập tại trang ctv.html.</p>
+
+                <div class="subsection-title">Khung 2 — Xác Nhận Mật Khẩu Admin (bắt buộc để tạo CTV mới)</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mật Khẩu Admin Của Bạn</label>
+                <input type="password" id="ctvAdminConfirmInput" class="form-control" required placeholder="Nhập lại mật khẩu Admin để xác nhận">
+                <div class="form-msg" id="ctvFormMsg"></div>
+
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Tạo Tài Khoản CTV</button>
+            </form>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tên Đăng Nhập</th>
+                            <th>Ngày Tạo</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminCtvTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Phần 1B: Quản lý Kho Acc Random Free (tặng miễn phí khi khách quay trúng 1/1000 mỗi ngày) -->
         <div class="admin-section">
             <h3><i class="fa-solid fa-gift" style="color: var(--gold);"></i> Kho Acc Random Free (Trang "Quay Là Trúng")</h3>
@@ -369,7 +415,7 @@
                     <input type="file" id="settingAudioFile" class="form-control" accept="audio/*" style="margin-bottom:0;">
                     <button type="button" class="btn-reset-media" onclick="resetMediaField('audioUrl')">Bỏ nhạc đã tải lên</button>
                 </div>
-                <p class="field-hint">Tệp nhạc tải lên được lưu ngay trên trình duyệt của bạn (IndexedDB), không giới hạn ~5MB như cách lưu cũ.</p>
+                <p class="field-hint">Tệp nhạc tải lên được lưu vĩnh viễn trên máy chủ (MongoDB Atlas/Cloudinary), phát được trên mọi thiết bị — không lưu riêng trên trình duyệt.</p>
 
                 <div class="subsection-title">Liên Kết Mạng Xã Hội</div>
                 <label style="font-size: 0.85rem; color: var(--text-muted);">TikTok</label>

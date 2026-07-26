@@ -44,6 +44,33 @@ const DEFAULT_ADMIN_PASSWORD = 'admin123';
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // ------------------------------------------------------------
+// Lưu trữ file tải lên (ảnh/nhạc): mặc định lưu vào đĩa server (server/uploads),
+// nhưng nếu có cấu hình Cloudinary (miễn phí) trong .env thì tự chuyển sang lưu trên
+// Cloudinary — cần thiết khi deploy ở các nền tảng có ổ đĩa tạm thời (VD Render Free),
+// nơi file trong uploads/ sẽ bị xoá mỗi khi server restart/sleep.
+// ------------------------------------------------------------
+const CLOUDINARY_ENABLED = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+let cloudinary;
+if (CLOUDINARY_ENABLED) {
+    cloudinary = require('cloudinary').v2;
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+}
+
+function uploadBufferToCloudinary(buffer) {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { resource_type: 'auto', folder: 'jhush' },
+            (err, result) => (err ? reject(err) : resolve(result.secure_url))
+        );
+        stream.end(buffer);
+    });
+}
+
+// ------------------------------------------------------------
 // Lớp lưu trữ: đọc toàn bộ DB vào bộ nhớ khi khởi động, mọi thay đổi
 // được ghi lại xuống đĩa ngay lập tức (nối tiếp nhau, tránh ghi đè chéo).
 // ------------------------------------------------------------
@@ -218,13 +245,15 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 // tránh việc ai đó tải lên file thực thi/độc hại đội lốt đuôi file khác.
 const ALLOWED_UPLOAD_MIME = /^(image\/|audio\/)/;
 const upload = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-        filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname || '').slice(0, 10);
-            cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
-        }
-    }),
+    storage: CLOUDINARY_ENABLED
+        ? multer.memoryStorage()
+        : multer.diskStorage({
+            destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+            filename: (req, file, cb) => {
+                const ext = path.extname(file.originalname || '').slice(0, 10);
+                cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
+            }
+        }),
     fileFilter: (req, file, cb) => {
         if (!ALLOWED_UPLOAD_MIME.test(file.mimetype)) {
             return cb(new Error('Chỉ chấp nhận tệp ảnh hoặc âm thanh.'));
@@ -404,8 +433,18 @@ app.get('/api/admin/state', requireAdmin, (req, res) => {
     });
 });
 
-app.post('/api/upload', requireAdmin, upload.single('file'), (req, res) => {
+app.post('/api/upload', requireAdmin, upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Không có tệp nào được tải lên.' });
+
+    if (CLOUDINARY_ENABLED) {
+        try {
+            const url = await uploadBufferToCloudinary(req.file.buffer);
+            return res.json({ url });
+        } catch (err) {
+            return res.status(500).json({ error: 'Tải lên Cloudinary thất bại: ' + err.message });
+        }
+    }
+
     res.json({ url: `/uploads/${req.file.filename}` });
 });
 
@@ -629,6 +668,12 @@ connectMongo().then(async ()=>{
 
         console.log(
         `Mật khẩu admin mặc định: ${DEFAULT_ADMIN_PASSWORD}`
+        );
+
+        console.log(
+        CLOUDINARY_ENABLED
+            ? 'Lưu trữ file tải lên: Cloudinary (vĩnh viễn, không mất khi restart)'
+            : 'Lưu trữ file tải lên: đĩa server (uploads/) — có thể mất khi restart trên gói hosting free/ổ đĩa tạm thời'
         );
 
     });
