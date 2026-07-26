@@ -13,20 +13,45 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
+const cloudinary = require('cloudinary').v2;
 
-const { MongoClient } = require("mongodb");
+const { MongoClient, GridFSBucket, ObjectId } = require("mongodb");
+
+// ------------------------------------------------------------
+// Cloudinary: lưu ảnh/nhạc upload vĩnh viễn (không mất khi Render restart/redeploy).
+// Cấu hình qua 3 biến môi trường; nếu thiếu bất kỳ biến nào, hệ thống tự
+// động rơi về lưu file cục bộ (chỉ nên dùng khi chạy thử trên máy local).
+// ------------------------------------------------------------
+const CLOUDINARY_CONFIGURED = !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+);
+
+if (CLOUDINARY_CONFIGURED) {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+    console.log("Cloudinary đã cấu hình — ảnh/nhạc upload sẽ được lưu trên Cloudinary.");
+} else {
+    console.log("Cloudinary chưa cấu hình — ảnh/nhạc upload sẽ lưu vào MongoDB Atlas (GridFS), vẫn vĩnh viễn, không cần dịch vụ ngoài nào.");
+}
 
 const MONGO_URL = process.env.MONGO_URL;
 
 console.log(MONGO_URL);
 
 let mongoDB;
+let gridBucket; // Bucket GridFS — lưu ảnh/nhạc trực tiếp trong MongoDB Atlas, vĩnh viễn, không phụ thuộc đĩa Render.
 
 async function connectMongo(){
     const client = new MongoClient(MONGO_URL);
     await client.connect();
 
     mongoDB = client.db("jhush");
+    gridBucket = new GridFSBucket(mongoDB, { bucketName: "uploads" });
 
     console.log("MongoDB connected");
 }
@@ -108,26 +133,56 @@ function publicSettings(s) {
     return rest;
 }
 
+function publicCollaborator(c) {
+    const { passwordHash, passwordSalt, ...rest } = c;
+    return rest;
+}
+function ensureCollaboratorsInitialized() {
+    if (!Array.isArray(db.collaborators)) db.collaborators = [];
+}
+
 // ------------------------------------------------------------
-// Phiên đăng nhập Admin (token ngẫu nhiên lưu trong bộ nhớ, hết hạn sau 12h).
-// Khởi động lại server sẽ buộc admin đăng nhập lại — chấp nhận được cho quy mô shop nhỏ.
+// Phiên đăng nhập (token ngẫu nhiên lưu trong bộ nhớ, hết hạn sau 12h).
+// Có 2 vai trò (role): 'admin' (toàn quyền) và 'ctv' (cộng tác viên — chỉ được
+// thao tác trên Kho Tài Khoản Bán, xem requireAccountManager bên dưới).
+// Khởi động lại server sẽ buộc đăng nhập lại — chấp nhận được cho quy mô shop nhỏ.
 // ------------------------------------------------------------
-const tokens = new Map(); // token -> expiresAt
-function issueToken() {
+const tokens = new Map(); // token -> { role, username, expiresAt }
+function issueToken(role = 'admin', username = null) {
     const token = crypto.randomBytes(24).toString('hex');
-    tokens.set(token, Date.now() + TOKEN_TTL_MS);
+    tokens.set(token, { role, username, expiresAt: Date.now() + TOKEN_TTL_MS });
     return token;
 }
-function requireAdmin(req, res, next) {
+function readToken(req) {
     const auth = req.headers.authorization || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-    const expiresAt = token && tokens.get(token);
-    if (!expiresAt || expiresAt < Date.now()) {
+    const info = token && tokens.get(token);
+    if (!info || info.expiresAt < Date.now()) {
         if (token) tokens.delete(token);
+        return null;
+    }
+    info.expiresAt = Date.now() + TOKEN_TTL_MS; // gia hạn khi còn hoạt động
+    return { token, info };
+}
+function requireAdmin(req, res, next) {
+    const found = readToken(req);
+    if (!found || found.info.role !== 'admin') {
         return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ.' });
     }
-    tokens.set(token, Date.now() + TOKEN_TTL_MS); // gia hạn khi còn hoạt động
     next();
+}
+// Cho phép cả Admin lẫn CTV — dùng cho các route Kho Tài Khoản Bán (mục duy nhất CTV được quyền thao tác)
+function requireAccountManager(req, res, next) {
+    const found = readToken(req);
+    if (!found || (found.info.role !== 'admin' && found.info.role !== 'ctv')) {
+        return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ.' });
+    }
+    req.tokenRole = found.info.role;
+    req.tokenUsername = found.info.username;
+    next();
+}
+function actorLabel(req) {
+    return req.tokenRole === 'ctv' ? `CTV "${req.tokenUsername}"` : 'Admin';
 }
 
 // ------------------------------------------------------------
@@ -168,14 +223,55 @@ app.use(express.static(path.join(__dirname, "../public")));
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 
 const upload = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-        filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname || '').slice(0, 10);
-            cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
-        }
-    }),
+    // Luôn giữ file tạm trong RAM: sẽ được đẩy lên Cloudinary (nếu có cấu hình)
+    // hoặc lưu vào GridFS trong chính MongoDB Atlas (mặc định) — không còn ghi ra
+    // đĩa cục bộ của Render nữa, nên không còn mất ảnh khi Render redeploy/restart.
+    storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024 } // 15MB
+});
+
+// Upload 1 buffer lên Cloudinary, trả về Promise<secure_url>
+function uploadBufferToCloudinary(buffer) {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { folder: 'jhush-shop', resource_type: 'auto' },
+            (error, result) => (error ? reject(error) : resolve(result))
+        );
+        stream.end(buffer);
+    });
+}
+
+// Lưu 1 buffer vào GridFS (MongoDB Atlas), trả về Promise<fileId dạng chuỗi>
+function uploadBufferToGridFS(buffer, filename, contentType) {
+    return new Promise((resolve, reject) => {
+        const uploadStream = gridBucket.openUploadStream(filename, { contentType });
+        uploadStream.on('error', reject);
+        uploadStream.on('finish', () => resolve(uploadStream.id.toString()));
+        uploadStream.end(buffer);
+    });
+}
+
+// Trả về file đã lưu trong GridFS theo id (dùng để hiển thị ảnh/phát nhạc trên trình duyệt)
+app.get('/files/:id', async (req, res) => {
+    let objectId;
+    try {
+        objectId = new ObjectId(req.params.id);
+    } catch (e) {
+        return res.status(400).end();
+    }
+
+    try {
+        const files = await gridBucket.find({ _id: objectId }).toArray();
+        if (!files.length) return res.status(404).end();
+
+        res.set('Content-Type', files[0].contentType || 'application/octet-stream');
+        res.set('Cache-Control', 'public, max-age=604800'); // cache 7 ngày trên trình duyệt
+        gridBucket.openDownloadStream(objectId)
+            .on('error', () => res.status(404).end())
+            .pipe(res);
+    } catch (err) {
+        res.status(500).end();
+    }
 });
 
 // ===================== CÔNG KHAI (KHÁCH) =====================
@@ -307,7 +403,7 @@ app.post('/api/admin/login', (req, res) => {
     ensureAdminPasswordInitialized();
     const hash = hashPassword(password || '', db.settings.adminPasswordSalt);
     if (hash !== db.settings.adminPasswordHash) return res.status(401).json({ error: 'Sai mật khẩu quản trị.' });
-    res.json({ token: issueToken() });
+    res.json({ token: issueToken('admin') });
 });
 
 app.post('/api/admin/logout', requireAdmin, (req, res) => {
@@ -342,52 +438,70 @@ app.get('/api/admin/state', requireAdmin, (req, res) => {
     });
 });
 
-app.post('/api/upload', requireAdmin, upload.single('file'), (req, res) => {
+app.post('/api/upload', requireAccountManager, upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Không có tệp nào được tải lên.' });
-    res.json({ url: `/uploads/${req.file.filename}` });
+
+    if (CLOUDINARY_CONFIGURED) {
+        try {
+            const result = await uploadBufferToCloudinary(req.file.buffer);
+            return res.json({ url: result.secure_url });
+        } catch (err) {
+            console.error('Lỗi upload Cloudinary:', err);
+            return res.status(500).json({ error: 'Lỗi khi tải tệp lên Cloudinary.' });
+        }
+    }
+
+    // Mặc định: lưu vào GridFS (MongoDB Atlas) — vĩnh viễn, không cần tài khoản dịch vụ ngoài nào.
+    try {
+        const fileId = await uploadBufferToGridFS(req.file.buffer, req.file.originalname, req.file.mimetype);
+        res.json({ url: `/files/${fileId}` });
+    } catch (err) {
+        console.error('Lỗi lưu file vào MongoDB GridFS:', err);
+        res.status(500).json({ error: 'Lỗi khi lưu tệp vào cơ sở dữ liệu.' });
+    }
 });
 
-// --- Accounts (kho acc bán) ---
-app.post('/api/accounts', requireAdmin, (req, res) => {
+// --- Accounts (kho acc bán) — Admin & CTV đều được thao tác ---
+app.post('/api/accounts', requireAccountManager, (req, res) => {
     const acc = { id: Date.now(), ...req.body };
     db.accounts.unshift(acc);
-    addActivityLog('Thêm tài khoản mới', `Đã thêm acc ${acc.code} (${acc.name}).`);
+    addActivityLog('Thêm tài khoản mới', `Đã thêm acc ${acc.code} (${acc.name}). [${actorLabel(req)}]`);
     persist();
     res.json(acc);
 });
 
-app.put('/api/accounts/:id', requireAdmin, (req, res) => {
+app.put('/api/accounts/:id', requireAccountManager, (req, res) => {
     const id = Number(req.params.id);
     const idx = db.accounts.findIndex(a => a.id === id);
     if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy acc.' });
     db.accounts[idx] = { ...db.accounts[idx], ...req.body, id };
-    addActivityLog('Cập nhật tài khoản', `Đã cập nhật acc ${db.accounts[idx].code} (${db.accounts[idx].name}).`);
+    addActivityLog('Cập nhật tài khoản', `Đã cập nhật acc ${db.accounts[idx].code} (${db.accounts[idx].name}). [${actorLabel(req)}]`);
     persist();
     res.json(db.accounts[idx]);
 });
 
-app.put('/api/accounts/:id/lock', requireAdmin, (req, res) => {
+app.put('/api/accounts/:id/lock', requireAccountManager, (req, res) => {
     const id = Number(req.params.id);
     const acc = db.accounts.find(a => a.id === id);
     if (!acc) return res.status(404).json({ error: 'Không tìm thấy acc.' });
     const { reason } = req.body || {};
     if (acc.status === 'hacked') {
         acc.status = 'selling';
-        addActivityLog('Mở khóa tài khoản', `Acc ${acc.code} (${acc.name}) đã được mở khóa, chuyển về "Đang bán".`);
+        addActivityLog('Mở khóa tài khoản', `Acc ${acc.code} (${acc.name}) đã được mở khóa, chuyển về "Đang bán". [${actorLabel(req)}]`);
     } else {
         acc.status = 'hacked';
-        addActivityLog('Khóa tài khoản nghi hack', `Acc ${acc.code} (${acc.name}) đã bị khóa.${reason ? ' Lý do: ' + reason : ''}`);
+        addActivityLog('Khóa tài khoản nghi hack', `Acc ${acc.code} (${acc.name}) đã bị khóa.${reason ? ' Lý do: ' + reason : ''} [${actorLabel(req)}]`);
     }
     persist();
     res.json(acc);
 });
 
-app.delete('/api/accounts/:id', requireAdmin, (req, res) => {
+app.delete('/api/accounts/:id', requireAccountManager, (req, res) => {
     const id = Number(req.params.id);
     const idx = db.accounts.findIndex(a => a.id === id);
     if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy acc.' });
     const [removed] = db.accounts.splice(idx, 1);
-    addActivityLog('Xóa tài khoản', `Đã xóa acc ${removed.code} (${removed.name}).`);
+    addActivityLog('Xóa tài khoản', `Đã xóa acc ${removed.code} (${removed.name}). [${actorLabel(req)}]`);
     persist();
     res.json({ ok: true });
 });
@@ -419,6 +533,90 @@ app.delete('/api/free-accounts/:id', requireAdmin, (req, res) => {
     addActivityLog('Xóa acc free', `Đã xóa acc tặng ${removed.code} khỏi kho Quay Là Trúng.`);
     persist();
     res.json({ ok: true });
+});
+
+// ===================== CỘNG TÁC VIÊN (CTV) =====================
+// CTV chỉ có quyền thao tác trên Kho Tài Khoản Bán (xem requireAccountManager ở trên),
+// không có quyền xem/sửa cấu hình hệ thống, sự kiện, nhật ký, hay quản lý CTV khác.
+
+// Admin tạo tài khoản CTV mới — bắt buộc xác nhận lại mật khẩu Admin (khung riêng)
+app.post('/api/admin/collaborators', requireAdmin, (req, res) => {
+    const { username, password, adminPassword } = req.body || {};
+    const uname = String(username || '').trim();
+
+    if (!uname || !password) return res.status(400).json({ error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu cho CTV.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Mật khẩu CTV phải có ít nhất 6 ký tự.' });
+
+    const adminHash = hashPassword(adminPassword || '', db.settings.adminPasswordSalt);
+    if (adminHash !== db.settings.adminPasswordHash) {
+        return res.status(400).json({ error: 'Mật khẩu Admin xác nhận không đúng.' });
+    }
+
+    ensureCollaboratorsInitialized();
+    if (db.collaborators.some(c => c.username.toLowerCase() === uname.toLowerCase())) {
+        return res.status(400).json({ error: 'Tài khoản CTV này đã tồn tại.' });
+    }
+
+    const salt = generateSalt();
+    const collaborator = {
+        id: Date.now(),
+        username: uname,
+        passwordHash: hashPassword(password, salt),
+        passwordSalt: salt,
+        createdAt: Date.now()
+    };
+    db.collaborators.unshift(collaborator);
+    addActivityLog('Tạo tài khoản CTV', `Admin đã tạo tài khoản cộng tác viên "${uname}".`);
+    persist();
+    res.json(publicCollaborator(collaborator));
+});
+
+// Admin xem danh sách CTV
+app.get('/api/admin/collaborators', requireAdmin, (req, res) => {
+    ensureCollaboratorsInitialized();
+    res.json(db.collaborators.map(publicCollaborator));
+});
+
+// Admin xóa CTV — đồng thời hủy ngay mọi phiên đăng nhập đang mở của CTV đó
+app.delete('/api/admin/collaborators/:id', requireAdmin, (req, res) => {
+    ensureCollaboratorsInitialized();
+    const id = Number(req.params.id);
+    const idx = db.collaborators.findIndex(c => c.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy CTV.' });
+    const [removed] = db.collaborators.splice(idx, 1);
+
+    for (const [tok, info] of tokens.entries()) {
+        if (info.role === 'ctv' && info.username === removed.username) tokens.delete(tok);
+    }
+
+    addActivityLog('Xóa tài khoản CTV', `Admin đã xóa tài khoản cộng tác viên "${removed.username}".`);
+    persist();
+    res.json({ ok: true });
+});
+
+// Đăng nhập CTV — trang riêng ctv.html, chỉ cấp quyền quản lý Kho Tài Khoản Bán
+app.post('/api/collaborator/login', (req, res) => {
+    ensureCollaboratorsInitialized();
+    const { username, password } = req.body || {};
+    const uname = String(username || '').trim();
+    const collaborator = db.collaborators.find(c => c.username.toLowerCase() === uname.toLowerCase());
+    if (!collaborator) return res.status(401).json({ error: 'Sai tài khoản hoặc mật khẩu.' });
+
+    const hash = hashPassword(password || '', collaborator.passwordSalt);
+    if (hash !== collaborator.passwordHash) return res.status(401).json({ error: 'Sai tài khoản hoặc mật khẩu.' });
+
+    res.json({ token: issueToken('ctv', collaborator.username), username: collaborator.username });
+});
+
+app.post('/api/collaborator/logout', requireAccountManager, (req, res) => {
+    const token = req.headers.authorization.slice(7);
+    tokens.delete(token);
+    res.json({ ok: true });
+});
+
+// Dữ liệu cho trang CTV — CHỈ trả về Kho Tài Khoản Bán, không settings/sự kiện/nhật ký/CTV khác
+app.get('/api/collaborator/state', requireAccountManager, (req, res) => {
+    res.json({ accounts: db.accounts, role: req.tokenRole, username: req.tokenUsername });
 });
 
 // --- Cấu hình hệ thống ---
@@ -546,6 +744,8 @@ connectMongo().then(async ()=>{
 
 
     ensureAdminPasswordInitialized();
+    ensureCollaboratorsInitialized();
+    persist();
 
 
     app.listen(PORT, () => {

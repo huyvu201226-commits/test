@@ -59,6 +59,38 @@ function loadSettingsToClient() {
     if (audio && audioSrc) audio.src = audioSrc;
 
     applySocialLinks(settings.socialLinks || {});
+    applyBackground(settings);
+}
+
+// Áp dụng nền website tùy chỉnh do admin cấu hình (màu đơn sắc / gradient / ảnh nền).
+// Nếu bgType là 'default' hoặc không có gì được cấu hình, giữ nguyên nền theo
+// giao diện Sáng/Tối mặc định (biến CSS --bg-main).
+function applyBackground(settings) {
+    const body = document.body;
+    // Reset về trạng thái mặc định trước khi áp lại, tránh còn sót style cũ
+    body.style.background = '';
+    body.style.backgroundColor = '';
+    body.style.backgroundImage = '';
+    body.style.backgroundSize = '';
+    body.style.backgroundPosition = '';
+    body.style.backgroundAttachment = '';
+
+    const type = settings.bgType || 'default';
+
+    if (type === 'color' && settings.bgColor) {
+        body.style.backgroundColor = settings.bgColor;
+    } else if (type === 'gradient' && settings.bgGradientFrom && settings.bgGradientTo) {
+        body.style.background = `linear-gradient(135deg, ${settings.bgGradientFrom}, ${settings.bgGradientTo})`;
+    } else if (type === 'image' && settings.bgImageUrl) {
+        const url = resolveMediaSrc(settings.bgImageUrl, '');
+        if (url) {
+            body.style.backgroundImage = `url('${url}')`;
+            body.style.backgroundSize = 'cover';
+            body.style.backgroundPosition = 'center';
+            body.style.backgroundAttachment = 'fixed';
+        }
+    }
+    // type === 'default' -> không set gì thêm, body dùng var(--bg-main) như cũ
 }
 
 // Cập nhật các nút liên kết mạng xã hội theo cấu hình admin
@@ -425,11 +457,22 @@ function renderAccounts(accountsToRender) {
         const statusInfo = CLIENT_STATUS_LABELS[acc.status] || CLIENT_STATUS_LABELS.selling;
         const typeInfo = ACCOUNT_TYPE_LABELS[acc.type] || ACCOUNT_TYPE_LABELS.reg;
 
+        // Huy hiệu "Giảm 5%": hiện trên MỌI acc còn đủ điều kiện áp mã (không phải Acc Reg,
+        // và thiết bị này chưa dùng ưu đãi 5% lần nào) — dùng chung logic với lúc bấm mua.
+        const eligibleDiscountBadge = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
+        // Giá sau giảm — tính giống hệt công thức dùng khi mở modal mua, để giá hiển thị
+        // trên thẻ và giá lúc thanh toán luôn khớp nhau.
+        const discountedPrice = eligibleDiscountBadge ? Math.round(acc.price * 0.95) : acc.price;
+        const priceHtml = eligibleDiscountBadge
+            ? `<span class="acc-price-original">${formatVND(acc.price)}</span>${formatVND(discountedPrice)}`
+            : formatVND(acc.price);
+
         const card = document.createElement('div');
         card.className = 'acc-card hover-card';
         card.innerHTML = `
             <div class="acc-img-wrap">
                 <img src="${escapeHtml(resolveMediaSrc(acc.img, fallbackImg))}" alt="Ảnh acc ${escapeHtml(acc.code)}" loading="lazy">
+                ${eligibleDiscountBadge ? `<span class="acc-discount-badge">-5%</span>` : ''}
                 ${statusInfo.badge}
             </div>
             <div class="acc-body">
@@ -439,7 +482,7 @@ function renderAccounts(accountsToRender) {
                 </div>
                 <h4 class="acc-title">${escapeHtml(acc.name)}</h4>
                 ${acc.info ? `<div style="font-size:0.8rem; color: var(--text-muted);">${escapeHtml(acc.info)}</div>` : ''}
-                <div class="acc-price">${formatVND(acc.price)}</div>
+                <div class="acc-price">${priceHtml}</div>
                 <button class="btn-action-acc" ${statusInfo.disabled ? 'disabled' : ''} data-code="${escapeHtml(acc.code)}">
                     ${statusInfo.btnText}
                 </button>
@@ -472,7 +515,14 @@ function applyAllFilters() {
     const accounts = getAccounts();
 
     const filtered = accounts.filter(acc => {
-        const matchKeyword = acc.name.toLowerCase().includes(keyword) || acc.code.toLowerCase().includes(keyword);
+        // Tìm trong: tên, mã, thông tin ngắn, mô tả chi tiết và giá (không chỉ riêng tên/mã như trước)
+        const matchKeyword = !keyword || [
+            acc.name,
+            acc.code,
+            acc.info,
+            acc.description,
+            acc.price != null ? String(acc.price) : ''
+        ].some(field => (field || '').toString().toLowerCase().includes(keyword));
         const matchPrice = currentPriceFilter === 'all' || acc.category === currentPriceFilter;
         const matchType = currentTypeFilter === 'all' || acc.type === currentTypeFilter;
         return matchKeyword && matchPrice && matchType;
@@ -573,6 +623,7 @@ async function confirmPaymentZalo() {
             await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
             _deviceStatus.discountUsed = true;
             checkDeviceDiscountCode();
+            applyAllFilters();             // vẽ lại lưới acc để ẩn huy hiệu "-5%" ngay lập tức
         } catch (err) {
             console.error('Không thể ghi nhận sử dụng mã giảm giá:', err);
         }

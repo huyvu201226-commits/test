@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Trang Cộng Tác Viên - Shop J-Hush</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-wrapper { max-width: 1000px; margin: 30px auto; padding: 0 15px; }
+        .admin-section { background: var(--bg-card); border: 1px solid var(--card-border); border-radius: 12px; padding: 25px; margin-bottom: 25px; }
+        .form-control { width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 6px; color: var(--text-main); margin-bottom: 12px; }
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
+        th { color: var(--gold); }
+        .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
+        .badge-hacked { background: #f97316; color: #1a1200; }
+        .btn-sm { padding: 6px 10px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; margin: 2px; }
+        .btn-edit { background: var(--accent-blue); color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+        .btn-lock { background: #f97316; color: #1a1200; }
+        .btn-unlock { background: #10b981; color: white; }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-main); z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 15px; }
+        .login-boxes { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 380px; }
+        .login-box { background: var(--bg-card); border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; }
+        .login-box-title { font-size: 0.95rem; color: var(--gold); margin-bottom: 12px; font-weight: bold; }
+        .remember-row { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; font-size: 0.85rem; color: var(--text-muted); }
+        .remember-row input { width: auto; margin: 0; }
+        .admin-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--card-border); }
+        .field-hint { font-size: 0.78rem; color: var(--text-muted); margin: -6px 0 12px; }
+        .upload-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .btn-reset-media { background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text-main); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+        .form-msg { font-size: 0.82rem; margin: -6px 0 12px; min-height: 1em; }
+        .form-msg.error { color: #ef4444; }
+        .form-msg.success { color: #10b981; }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .ctv-welcome { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; }
+
+        @media (max-width: 600px) {
+            .admin-wrapper { margin: 15px auto; padding: 0 12px; }
+            .admin-section { padding: 18px; }
+            .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; gap: 0; }
+            .upload-row { grid-template-columns: 1fr; }
+            table, thead, tbody, th, td, tr { font-size: 0.82rem; }
+            .btn-sm { padding: 6px 8px; font-size: 0.75rem; }
+            th, td { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Màn hình đăng nhập CTV -->
+    <div class="login-overlay" id="ctvLoginBox">
+        <div class="login-boxes">
+            <div class="login-box animate-pop">
+                <h2 class="brand-title" style="margin-bottom: 8px; font-size: 1.1rem;"><i class="fa-solid fa-user-tie"></i> Đăng Nhập Cộng Tác Viên</h2>
+                <p class="field-hint" style="margin: 0 0 14px;">Dùng tài khoản/mật khẩu do Admin cấp cho bạn.</p>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tên Đăng Nhập</label>
+                <input type="text" id="ctvLoginUsername" class="form-control" placeholder="Tên đăng nhập CTV" autocomplete="username">
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mật Khẩu</label>
+                <input type="password" id="ctvLoginPassword" class="form-control" placeholder="Mật khẩu" autocomplete="current-password">
+
+                <div class="remember-row">
+                    <input type="checkbox" id="ctvRememberMe">
+                    <label for="ctvRememberMe">Ghi nhớ đăng nhập cho lần sau</label>
+                </div>
+
+                <div class="form-msg error" id="ctvLoginMsg"></div>
+                <button class="btn-submit" onclick="handleCtvLogin()">Đăng Nhập</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thanh điều hướng -->
+    <header class="top-navbar">
+        <div class="nav-left">
+            <span class="brand-title"><i class="fa-solid fa-user-tie"></i> Trang Cộng Tác Viên - Shop J-Hush</span>
+        </div>
+        <div class="nav-right">
+            <span class="nav-link" id="ctvWhoAmI" style="cursor:default;"></span>
+            <button class="btn-theme-toggle" onclick="logoutCtv()"><i class="fa-solid fa-right-from-bracket"></i> Đăng Xuất</button>
+        </div>
+    </header>
+
+    <div class="admin-wrapper">
+
+        <!-- Duy nhất: Quản lý Kho Tài khoản Bán -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-store" style="color: var(--gold);"></i> Quản Lý Tài Khoản Game Đang Bán</h3>
+            <p class="ctv-welcome">Thêm mới, chỉnh sửa, khóa nghi hack hoặc xóa các tài khoản trong kho đang bán. Bạn chỉ có quyền thao tác ở mục này.</p>
+
+            <form id="accForm" onsubmit="saveAccount(event)">
+                <input type="hidden" id="editIndex" value="-1">
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mã Số Acc (VD: JH-05)</label>
+                        <input type="text" id="accCodeInput" class="form-control" required placeholder="JH-05">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Acc</label>
+                        <input type="text" id="accNameInput" class="form-control" required placeholder="Acc Vip...">
+                    </div>
+                </div>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Thông Tin Nhanh (VD: rank, số tướng/skin — hiển thị ngay ở thẻ acc)</label>
+                <input type="text" id="accInfoInput" class="form-control" placeholder="VD: 50 tướng, Rank Cao Thủ">
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả Chi Tiết (hiển thị riêng trong khung mua acc)</label>
+                <textarea id="accDescInput" class="form-control" rows="3" placeholder="Mô tả chi tiết về acc: tình trạng bảo mật, cam kết, hỗ trợ..."></textarea>
+
+                <div class="form-grid-3">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Giá Tiền (VNĐ)</label>
+                        <input type="number" id="accPriceInput" class="form-control" required placeholder="150000">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Mức Giá Lọc (Danh mục)</label>
+                        <select id="accCategoryInput" class="form-control">
+                            <option value="cheap">&lt; 100k</option>
+                            <option value="mid">100k - 500k</option>
+                            <option value="high">500k - 2Tr</option>
+                            <option value="expensive">&gt; 2Tr</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Trạng Thái</label>
+                        <select id="accStatusInput" class="form-control">
+                            <option value="selling">Đang bán</option>
+                            <option value="sold">Đã bán</option>
+                            <option value="banned">Bị ban (game khóa)</option>
+                            <option value="hacked">Nghi ngờ hack - Đã khóa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Loại Acc (dùng để khách lọc theo loại + áp quy tắc mã giảm giá)</label>
+                <select id="accTypeInput" class="form-control">
+                    <option value="reg">Acc Reg (không được áp mã giảm 5%)</option>
+                    <option value="vip">Acc VIP</option>
+                    <option value="ttx">Acc TTX</option>
+                </select>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Link Hình Ảnh Minh Họa (hoặc tải ảnh từ máy bên dưới)</label>
+                <input type="url" id="accImgInput" class="form-control" placeholder="https://images.unsplash.com/...">
+
+                <div class="upload-row">
+                    <input type="file" id="accImgFileInput" class="form-control" accept="image/*" style="margin-bottom:0;">
+                    <button type="button" class="btn-reset-media" onclick="clearAccImageUpload()">Bỏ ảnh tải lên</button>
+                </div>
+                <p class="field-hint">Nếu chọn ảnh từ máy, ảnh sẽ được ưu tiên dùng thay cho link ở trên.</p>
+
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Lưu Tài Khoản</button>
+            </form>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ảnh</th>
+                            <th>Mã</th>
+                            <th>Tên Acc</th>
+                            <th>Loại</th>
+                            <th>Giá</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ctvAccTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="data.js" defer></script>
+    <script src="ctv.js" defer></script>
+</body>
+</html>
