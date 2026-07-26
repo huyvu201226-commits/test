@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Quản Trị Hệ Thống - Shop J-Hush</title>
+    <title>Quản Trị Hệ Thống - Shop J_HUSH</title>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -83,10 +83,24 @@
 
     <div class="admin-wrapper">
 
+        <!-- Phần 0: Kiểm tra ảnh/nhạc hỏng — phát hiện các mục còn dùng đường dẫn /uploads/ cũ
+             (lưu trên đĩa Render, đã bị xóa vĩnh viễn khi redeploy) để biết chính xác cần tải lại
+             ảnh/nhạc nào, tránh phải kiểm tra thủ công từng acc một. -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-magnifying-glass" style="color: var(--gold);"></i> Kiểm Tra Ảnh/Nhạc Bị Hỏng</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                Quét toàn bộ shop để tìm ảnh/nhạc còn dùng đường dẫn lưu trữ kiểu cũ (đã hỏng vĩnh viễn trên mọi thiết bị).
+                Mục nào xuất hiện ở đây thì cần vào đúng chỗ đó (acc / cấu hình / sự kiện) và <b>tải lại ảnh hoặc nhạc mới</b> để khắc phục.
+            </p>
+            <button type="button" class="btn-submit" style="width: auto; padding: 10px 25px;" onclick="scanBrokenMedia()">Quét Ngay</button>
+            <div id="brokenMediaResult" style="margin-top: 15px;"></div>
+        </div>
+
         <!-- Phần 1: Quản lý Kho Tài khoản (Thêm / Sửa / Xóa / Cập nhật trạng thái / Khóa nghi hack) -->
         <div class="admin-section">
             <h3><i class="fa-solid fa-store" style="color: var(--gold);"></i> Quản Lý Tài Khoản Game & Hoạt Động Bất Thường</h3>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Thêm mới, cập nhật trạng thái, hoặc khóa nhanh các tài khoản có dấu hiệu bị hack / hoạt động đáng ngờ.</p>
+
 
             <form id="accForm" onsubmit="saveAccount(event)">
                 <input type="hidden" id="editIndex" value="-1">
