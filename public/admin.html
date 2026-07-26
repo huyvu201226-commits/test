@@ -9,7 +9,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS Tùy Chỉnh -->
-    <link rel="stylesheet" href="style.css?v=20260727a">
+    <link rel="stylesheet" href="style.css?v=20260727b">
     <style>
         .admin-wrapper { max-width: 1000px; margin: 30px auto; padding: 0 15px; }
         .admin-section { background: var(--bg-card); border: 1px solid var(--card-border); border-radius: 12px; padding: 25px; margin-bottom: 25px; }
@@ -379,6 +379,14 @@
 
             <form id="settingsForm" onsubmit="saveGlobalSettings(event)">
 
+                <div class="subsection-title" style="margin-top:0; padding-top:0; border-top:none;">Tiêu Đề Trang &amp; Mô Tả (Tab trình duyệt + xem trước khi chia sẻ link Zalo/Facebook)</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Trang</label>
+                <input type="text" id="settingSiteTitle" class="form-control" required maxlength="70" placeholder="Shop J_HUSH - Web Kết Nối Chính Thức Bởi Admin HUIDUC">
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả Trang</label>
+                <textarea id="settingSiteDescription" class="form-control" rows="2" required maxlength="200" placeholder="Shop J_HUSH - Web kết nối chính thức bởi Admin HUIDUC."></textarea>
+                <p class="field-hint">Đổi xong bấm Lưu Cấu Hình là áp dụng ngay, không cần deploy lại code. Riêng preview trên Zalo/Facebook có thể vẫn hiện bản cũ một lúc do họ tự lưu cache — thường tự làm mới sau khi chia sẻ lại link.</p>
+
                 <div class="subsection-title">Thông Tin Chung</div>
                 <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Tên Admin (Tab Giới Thiệu)</label>
                 <input type="text" id="settingAdminTitle" class="form-control" required>
@@ -464,7 +472,7 @@
     </div>
 
     <!-- Script Quản Trị: tách riêng ra data.js (dùng chung) + admin.js để dễ bảo trì và cache trình duyệt -->
-    <script src="data.js?v=20260727a" defer></script>
-    <script src="admin.js?v=20260727a" defer></script>
+    <script src="data.js?v=20260727b" defer></script>
+    <script src="admin.js?v=20260727b" defer></script>
 </body>
 </html>

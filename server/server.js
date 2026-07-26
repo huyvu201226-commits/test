@@ -217,6 +217,43 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// Escape để chèn an toàn vào thuộc tính HTML (tránh lỗi hiển thị / chèn mã lạ nếu admin gõ ký tự đặc biệt)
+function escapeHtmlAttr(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// Render động trang chủ: chèn Tiêu Đề/Mô Tả do Admin cấu hình vào thẻ <title>, <meta description>
+// và Open Graph — quyết định nội dung hiện ra khi dán link vào Zalo/Facebook/Messenger, và không
+// cần deploy lại code mỗi khi đổi tên/mô tả shop. Đặt TRƯỚC express.static để có hiệu lực.
+app.get(['/', '/index.html'], (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '../public/index.html');
+        let html = fs.readFileSync(filePath, 'utf8');
+
+        const title = (db.settings && db.settings.siteTitle) || 'Shop J_HUSH';
+        const description = (db.settings && db.settings.siteDescription) || 'Web kết nối chính thức bởi Admin HUIDUC.';
+        const logoUrl = db.settings && db.settings.logoUrl;
+        const ogImage = logoUrl ? (logoUrl.startsWith('http') ? logoUrl : `${req.protocol}://${req.get('host')}${logoUrl}`) : '';
+        const pageUrl = `${req.protocol}://${req.get('host')}/`;
+
+        html = html
+            .split('__SITE_TITLE__').join(escapeHtmlAttr(title))
+            .split('__SITE_DESCRIPTION__').join(escapeHtmlAttr(description))
+            .split('__SITE_OG_IMAGE__').join(escapeHtmlAttr(ogImage))
+            .split('__SITE_URL__').join(escapeHtmlAttr(pageUrl));
+
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.send(html);
+    } catch (err) {
+        console.error('Lỗi render trang chủ:', err);
+        res.status(500).send('Lỗi tải trang.');
+    }
+});
+
 // Cho phép chạy giao diện frontend trong thư mục public
 app.use(express.static(path.join(__dirname, "../public")));
 

@@ -513,6 +513,8 @@ function loadSettingsToForm() {
     if (!titleInput) return;
 
     titleInput.value = settings.adminTitle || '';
+    document.getElementById('settingSiteTitle').value = settings.siteTitle || 'Shop J_HUSH - Web Kết Nối Chính Thức Bởi Admin HUIDUC';
+    document.getElementById('settingSiteDescription').value = settings.siteDescription || 'Shop J_HUSH - Web kết nối chính thức bởi Admin HUIDUC.';
     document.getElementById('settingIntroText').value = settings.introText || '';
     document.getElementById('settingBankName').value = settings.bankName || '';
     document.getElementById('settingBankAcc').value = settings.bankAcc || '';
@@ -543,6 +545,8 @@ async function saveGlobalSettings(event) {
     event.preventDefault();
     const payload = {
         adminTitle: document.getElementById('settingAdminTitle').value,
+        siteTitle: document.getElementById('settingSiteTitle').value.trim(),
+        siteDescription: document.getElementById('settingSiteDescription').value.trim(),
         introText: document.getElementById('settingIntroText').value,
         bankName: document.getElementById('settingBankName').value,
         bankAcc: document.getElementById('settingBankAcc').value,
