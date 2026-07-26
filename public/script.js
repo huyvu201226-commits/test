@@ -13,11 +13,17 @@ const CLIENT_STATUS_LABELS = {
 
 let _deviceStatus = { discountUsed: false, promoSpin: { spun: false, won: false }, freeSpin: { spun: false, won: false, prizeCode: null }, events: {} };
 
+// Promise của lần nạp cấu hình đầu tiên — enterWebsite() cần đợi cái này xong (nếu chưa xong)
+// trước khi phát nhạc, vì trên điện thoại thao tác play() chỉ được phép ngay trong/khá gần
+// cử chỉ chạm của người dùng; nếu audio.src chưa kịp có do mạng chậm thì play() sẽ không làm gì cả.
+let clientDataReadyPromise = null;
+
 // Chạy khi tải trang xong
 document.addEventListener("DOMContentLoaded", async () => {
     const grid = document.getElementById('accountGrid');
     try {
-        await initClientData();
+        clientDataReadyPromise = initClientData();
+        await clientDataReadyPromise;
         _deviceStatus = await getDeviceStatus();
     } catch (err) {
         console.error('Không thể tải dữ liệu từ máy chủ:', err);
@@ -34,7 +40,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderFreeSpinStatus();   // trạng thái vòng quay acc random free (1 lượt/ngày/thiết bị)
     renderShopEventBanners(); // banner sự kiện đang hoạt động (tab Shop)
     renderEventWheels();      // vòng quay riêng cho từng sự kiện (tab Quay Là Trúng)
+    startMusicSync();         // tự động cập nhật nhạc nền khi admin đổi, không cần tải lại trang
 });
+
+// ------------------------------------------------------------
+// Đồng bộ nhạc nền định kỳ: settings chỉ được nạp 1 lần lúc vào trang, nên nếu admin
+// đổi nhạc trong khi khách vẫn đang mở trang thì khách sẽ không nghe được nhạc mới cho
+// tới khi tải lại trang. Hàm này định kỳ hỏi máy chủ và tự cập nhật thẻ audio khi có
+// đường dẫn nhạc mới, giữ nguyên trạng thái đang phát/tạm dừng nếu có thể.
+// ------------------------------------------------------------
+const MUSIC_SYNC_INTERVAL_MS = 15000;
+function startMusicSync() {
+    setInterval(async () => {
+        try {
+            const settings = await apiFetch('/api/settings');
+            const newAudioUrl = settings && settings.audioUrl;
+            if (newAudioUrl !== _settingsCache.audioUrl) {
+                _settingsCache = { ..._settingsCache, ...settings };
+                applyAudioSource(newAudioUrl);
+            }
+        } catch (err) {
+            console.log('Không thể đồng bộ nhạc nền mới nhất:', err);
+        }
+    }, MUSIC_SYNC_INTERVAL_MS);
+}
+
+// Áp dụng đường dẫn nhạc nền mới vào thẻ audio, giữ nguyên trạng thái phát nếu đang phát
+function applyAudioSource(newAudioUrl) {
+    const audio = document.getElementById('bgAudio');
+    const btn = document.getElementById('btnPlayMusic');
+    if (!audio) return;
+
+    const wasPlaying = isPlayingMusic && !audio.paused;
+    const audioSrc = resolveMediaSrc(newAudioUrl, '');
+    audio.src = audioSrc;
+
+    if (audioSrc && wasPlaying) {
+        audio.play().catch(e => console.log("Trình duyệt chặn autoplay âm thanh:", e));
+    } else if (!audioSrc) {
+        isPlayingMusic = false;
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-play"></i> Phát/Tạm dừng nhạc';
+    }
+}
 
 // Tải cấu hình cài đặt từ Admin lên Client (logo, avatar, nhạc, social links, giới thiệu)
 function loadSettingsToClient() {
@@ -59,38 +106,6 @@ function loadSettingsToClient() {
     if (audio && audioSrc) audio.src = audioSrc;
 
     applySocialLinks(settings.socialLinks || {});
-    applyBackground(settings);
-}
-
-// Áp dụng nền website tùy chỉnh do admin cấu hình (màu đơn sắc / gradient / ảnh nền).
-// Nếu bgType là 'default' hoặc không có gì được cấu hình, giữ nguyên nền theo
-// giao diện Sáng/Tối mặc định (biến CSS --bg-main).
-function applyBackground(settings) {
-    const body = document.body;
-    // Reset về trạng thái mặc định trước khi áp lại, tránh còn sót style cũ
-    body.style.background = '';
-    body.style.backgroundColor = '';
-    body.style.backgroundImage = '';
-    body.style.backgroundSize = '';
-    body.style.backgroundPosition = '';
-    body.style.backgroundAttachment = '';
-
-    const type = settings.bgType || 'default';
-
-    if (type === 'color' && settings.bgColor) {
-        body.style.backgroundColor = settings.bgColor;
-    } else if (type === 'gradient' && settings.bgGradientFrom && settings.bgGradientTo) {
-        body.style.background = `linear-gradient(135deg, ${settings.bgGradientFrom}, ${settings.bgGradientTo})`;
-    } else if (type === 'image' && settings.bgImageUrl) {
-        const url = resolveMediaSrc(settings.bgImageUrl, '');
-        if (url) {
-            body.style.backgroundImage = `url('${url}')`;
-            body.style.backgroundSize = 'cover';
-            body.style.backgroundPosition = 'center';
-            body.style.backgroundAttachment = 'fixed';
-        }
-    }
-    // type === 'default' -> không set gì thêm, body dùng var(--bg-main) như cũ
 }
 
 // Cập nhật các nút liên kết mạng xã hội theo cấu hình admin
@@ -120,13 +135,34 @@ function applySocialLinks(links) {
 }
 
 // Xử lý màn hình chào mừng (Mở trang & Phát nhạc)
-function enterWebsite() {
+// LƯU Ý: trên điện thoại, trình duyệt chỉ cho phép audio.play() chạy khi được gọi ngay
+// trong lúc xử lý cử chỉ chạm của người dùng. Trước đây hàm này kiểm tra audio.src ngay lập
+// tức — nếu cấu hình (nhạc nền) chưa kịp tải xong (mạng di động thường chậm hơn), audio.src
+// vẫn rỗng nên play() không làm gì, và không có cơ hội thử lại => vào bằng điện thoại
+// thường xuyên bị mất tiếng. Giờ hàm đợi nốt phần cấu hình đang tải (nếu còn dang dở) trước
+// khi gán src & phát, để không bỏ lỡ nhạc chỉ vì tải chậm.
+async function enterWebsite() {
     const overlay = document.getElementById('welcomeOverlay');
     if (overlay) overlay.classList.add('hidden');
 
     const audio = document.getElementById('bgAudio');
-    if (audio && audio.src) {
-        audio.play().catch(e => console.log("Trình duyệt chặn autoplay âm thanh:", e));
+    if (!audio) return;
+
+    if (clientDataReadyPromise) {
+        try { await clientDataReadyPromise; } catch (e) { /* lỗi tải dữ liệu đã được báo ở nơi khác */ }
+    }
+
+    if (!audio.src) {
+        const audioSrc = resolveMediaSrc(getSettings().audioUrl, '');
+        if (audioSrc) audio.src = audioSrc;
+    }
+
+    if (audio.src) {
+        audio.play().then(() => {
+            isPlayingMusic = true;
+            const btn = document.getElementById('btnPlayMusic');
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-pause"></i> Đang phát nhạc...';
+        }).catch(e => console.log("Trình duyệt chặn autoplay âm thanh:", e));
     }
 }
 
@@ -367,7 +403,7 @@ function renderShopEventBanners() {
     container.innerHTML = events.map(ev => `
         <div class="hover-card" style="padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer; margin-bottom:14px;"
              onclick="switchTab('randomTab', document.querySelectorAll('.nav-link')[1]); window.scrollTo({top:0,behavior:'smooth'});">
-            ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-gift icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
+            ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" loading="lazy" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-gift icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
             <div>
                 <div style="font-weight:800;">${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin:0 0 0 6px; padding:2px 10px; font-size:0.7rem;">${escapeHtml(EVENT_TYPE_LABELS[ev.type] || 'Sự kiện')}</span></div>
                 <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Bấm để sang vòng quay sự kiện!')}</div>
@@ -457,22 +493,11 @@ function renderAccounts(accountsToRender) {
         const statusInfo = CLIENT_STATUS_LABELS[acc.status] || CLIENT_STATUS_LABELS.selling;
         const typeInfo = ACCOUNT_TYPE_LABELS[acc.type] || ACCOUNT_TYPE_LABELS.reg;
 
-        // Huy hiệu "Giảm 5%": hiện trên MỌI acc còn đủ điều kiện áp mã (không phải Acc Reg,
-        // và thiết bị này chưa dùng ưu đãi 5% lần nào) — dùng chung logic với lúc bấm mua.
-        const eligibleDiscountBadge = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
-        // Giá sau giảm — tính giống hệt công thức dùng khi mở modal mua, để giá hiển thị
-        // trên thẻ và giá lúc thanh toán luôn khớp nhau.
-        const discountedPrice = eligibleDiscountBadge ? Math.round(acc.price * 0.95) : acc.price;
-        const priceHtml = eligibleDiscountBadge
-            ? `<span class="acc-price-original">${formatVND(acc.price)}</span>${formatVND(discountedPrice)}`
-            : formatVND(acc.price);
-
         const card = document.createElement('div');
         card.className = 'acc-card hover-card';
         card.innerHTML = `
             <div class="acc-img-wrap">
                 <img src="${escapeHtml(resolveMediaSrc(acc.img, fallbackImg))}" alt="Ảnh acc ${escapeHtml(acc.code)}" loading="lazy">
-                ${eligibleDiscountBadge ? `<span class="acc-discount-badge">-5%</span>` : ''}
                 ${statusInfo.badge}
             </div>
             <div class="acc-body">
@@ -482,7 +507,7 @@ function renderAccounts(accountsToRender) {
                 </div>
                 <h4 class="acc-title">${escapeHtml(acc.name)}</h4>
                 ${acc.info ? `<div style="font-size:0.8rem; color: var(--text-muted);">${escapeHtml(acc.info)}</div>` : ''}
-                <div class="acc-price">${priceHtml}</div>
+                <div class="acc-price">${formatVND(acc.price)}</div>
                 <button class="btn-action-acc" ${statusInfo.disabled ? 'disabled' : ''} data-code="${escapeHtml(acc.code)}">
                     ${statusInfo.btnText}
                 </button>
@@ -515,14 +540,7 @@ function applyAllFilters() {
     const accounts = getAccounts();
 
     const filtered = accounts.filter(acc => {
-        // Tìm trong: tên, mã, thông tin ngắn, mô tả chi tiết và giá (không chỉ riêng tên/mã như trước)
-        const matchKeyword = !keyword || [
-            acc.name,
-            acc.code,
-            acc.info,
-            acc.description,
-            acc.price != null ? String(acc.price) : ''
-        ].some(field => (field || '').toString().toLowerCase().includes(keyword));
+        const matchKeyword = acc.name.toLowerCase().includes(keyword) || acc.code.toLowerCase().includes(keyword);
         const matchPrice = currentPriceFilter === 'all' || acc.category === currentPriceFilter;
         const matchType = currentTypeFilter === 'all' || acc.type === currentTypeFilter;
         return matchKeyword && matchPrice && matchType;
@@ -623,7 +641,6 @@ async function confirmPaymentZalo() {
             await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
             _deviceStatus.discountUsed = true;
             checkDeviceDiscountCode();
-            applyAllFilters();             // vẽ lại lưới acc để ẩn huy hiệu "-5%" ngay lập tức
         } catch (err) {
             console.error('Không thể ghi nhận sử dụng mã giảm giá:', err);
         }

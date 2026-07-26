@@ -1,6 +1,18 @@
 {
   "accounts": [
     {
+      "id": 1785054342125,
+      "code": "02",
+      "name": "billow",
+      "info": "",
+      "description": "",
+      "price": 550000,
+      "category": "cheap",
+      "type": "vip",
+      "status": "selling",
+      "img": "/files/6a65c4850a282220f330eea9"
+    },
+    {
       "id": 1785048638674,
       "code": "01",
       "name": "qlen",
@@ -15,52 +27,17 @@
   ],
   "activityLog": [
     {
-      "time": 1785053444444,
-      "action": "Xóa tài khoản CTV",
-      "detail": "Admin đã xóa tài khoản cộng tác viên \"ctv01\"."
-    },
-    {
-      "time": 1785053309220,
-      "action": "Tạo tài khoản CTV",
-      "detail": "Admin đã tạo tài khoản cộng tác viên \"ctv01\"."
-    },
-    {
-      "time": 1785050623398,
-      "action": "Cập nhật tài khoản",
-      "detail": "Đã cập nhật acc 01 (qlen)."
-    },
-    {
-      "time": 1785048771236,
-      "action": "Cập nhật tài khoản",
-      "detail": "Đã cập nhật acc 01 (qlen)."
-    },
-    {
-      "time": 1785048638674,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc 01 (qlen)."
-    },
-    {
-      "time": 1785048518412,
-      "action": "Xóa tài khoản",
-      "detail": "Đã xóa acc 01 (qlen)."
-    },
-    {
-      "time": 1785048417337,
+      "time": 1785061412069,
       "action": "Cập nhật cấu hình hệ thống",
       "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
     },
     {
-      "time": 1785048385728,
+      "time": 1785059273502,
       "action": "Cập nhật cấu hình hệ thống",
       "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
     },
     {
-      "time": 1785010179203,
-      "action": "Cập nhật cấu hình hệ thống",
-      "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
-    },
-    {
-      "time": 1785009763531,
+      "time": 1785054765914,
       "action": "Cập nhật cấu hình hệ thống",
       "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
     }
@@ -107,6 +84,18 @@
       },
       "freeSpin": null,
       "events": {}
+    },
+    "JH-DISC-J5V9Y0": {
+      "discountUsed": true,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-Z5M8TK": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
     }
   },
   "events": [],
@@ -138,7 +127,7 @@
     "bankName": "BIDV",
     "bankAcc": "8853340606",
     "bankOwner": "VU HUY DUC",
-    "audioUrl": "/files/6a65ad404442ec4a6996259b",
+    "audioUrl": "/uploads/1785061411866_kk8kji.mp3",
     "logoUrl": "/files/6a65ad3f4442ec4a69962597",
     "avatarUrl": "/files/6a65ad404442ec4a69962599",
     "qrImageUrl": "/files/6a65ad614442ec4a699625b5",
@@ -151,5 +140,13 @@
     "adminPasswordHash": "ab4dd9c34e1ebf76cdf687cdd8a3b5aa1d5f927e51497b6971a42cd26904a568",
     "adminPasswordSalt": "cf6e107b09c5facad9d28f452565d11a"
   },
-  "collaborators": []
+  "collaborators": [
+    {
+      "id": 1785054230529,
+      "username": "ctv01",
+      "passwordHash": "b72a9da026f57ace9d233de01ec1479b6385aca97e354a8527ede346ad1051a9",
+      "passwordSalt": "1a3c9ccde3e3f86160b2380de4f249a9",
+      "createdAt": 1785054230529
+    }
+  ]
 }

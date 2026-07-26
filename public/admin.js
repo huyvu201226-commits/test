@@ -36,17 +36,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Event delegation cho bảng Cộng Tác Viên
-    const ctvTbody = document.getElementById('adminCtvTableBody');
-    if (ctvTbody) {
-        ctvTbody.addEventListener('click', (e) => {
-            const btn = e.target.closest('button[data-action]');
-            if (!btn) return;
-            const id = Number(btn.dataset.id);
-            if (btn.dataset.action === 'delete-ctv') deleteCollaborator(id);
-        });
-    }
-
     // Event delegation cho bảng kho acc free
     const freeTbody = document.getElementById('adminFreeAccTableBody');
     if (freeTbody) {
@@ -117,79 +106,6 @@ async function loadAdminData() {
     renderActivityLog();
     renderEventsAdmin();
     updateAdminNavLogo();
-    loadCollaborators();
-}
-
-// ============================================================
-// QUẢN LÝ CỘNG TÁC VIÊN (CTV) — chỉ Admin mới tạo/xóa được
-// ============================================================
-async function loadCollaborators() {
-    try {
-        const list = await apiFetch('/api/admin/collaborators');
-        renderCollaborators(list);
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-function renderCollaborators(list) {
-    const tbody = document.getElementById('adminCtvTableBody');
-    if (!tbody) return;
-
-    if (!list || list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="log-empty">Chưa có cộng tác viên nào.</td></tr>';
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    list.forEach((ctv) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><b>${escapeHtml(ctv.username)}</b></td>
-            <td>${formatDateTime(ctv.createdAt)}</td>
-            <td><button class="btn-sm btn-delete" data-id="${ctv.id}" data-action="delete-ctv">Xóa CTV</button></td>
-        `;
-        fragment.appendChild(tr);
-    });
-    tbody.innerHTML = '';
-    tbody.appendChild(fragment);
-}
-
-async function createCollaborator(event) {
-    event.preventDefault();
-    const msg = document.getElementById('ctvFormMsg');
-    msg.textContent = '';
-    msg.classList.remove('error', 'success');
-
-    const username = document.getElementById('ctvUsernameInput').value.trim();
-    const password = document.getElementById('ctvPasswordInput').value;
-    const adminPassword = document.getElementById('ctvAdminConfirmInput').value;
-
-    try {
-        await apiFetch('/api/admin/collaborators', {
-            method: 'POST',
-            body: JSON.stringify({ username, password, adminPassword })
-        });
-        document.getElementById('ctvForm').reset();
-        msg.classList.add('success');
-        msg.textContent = `Đã tạo tài khoản CTV "${username}" thành công.`;
-        loadCollaborators();
-        renderActivityLog();
-    } catch (err) {
-        msg.classList.add('error');
-        msg.textContent = err.message;
-    }
-}
-
-async function deleteCollaborator(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa tài khoản CTV này? CTV sẽ bị đăng xuất ngay lập tức.')) return;
-    try {
-        await apiFetch(`/api/admin/collaborators/${id}`, { method: 'DELETE' });
-        loadCollaborators();
-        renderActivityLog();
-    } catch (err) {
-        alert('Lỗi khi xóa CTV: ' + err.message);
-    }
 }
 
 // ============================================================

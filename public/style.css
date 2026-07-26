@@ -549,23 +549,6 @@ img, svg, video, iframe { max-width: 100%; }
     font-weight: bold;
 }
 
-/* Huy hiệu "Giảm 5%" hiển thị ở góc trên-trái ảnh acc (khi acc còn đủ điều kiện
-   áp mã giảm 5% và thiết bị chưa dùng ưu đãi) — giống kiểu ruy băng khuyến mãi
-   thường thấy trên các sàn TMĐT. Không đè lên badge trạng thái (đang ở góc phải). */
-.acc-discount-badge {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    background: linear-gradient(135deg, #ef4444, #f97316);
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-    z-index: 2;
-}
-
 /* Pill không định vị tuyệt đối, dùng để hiển thị badge loại acc ngay trong nội dung (khác với
    .acc-status-badge vốn định vị tuyệt đối để đè lên góc ảnh) */
 .type-pill { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 0.72rem; font-weight: bold; white-space: nowrap; }
@@ -604,16 +587,6 @@ img, svg, video, iframe { max-width: 100%; }
     font-weight: 800;
     color: #22c55e;
     margin-top: auto;
-}
-
-/* Giá gốc bị gạch ngang khi acc đang được áp mã giảm 5% (hiển thị ngay trên thẻ acc,
-   không cần mở modal mua mới thấy) */
-.acc-price-original {
-    color: var(--text-muted);
-    text-decoration: line-through;
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin-right: 6px;
 }
 
 .btn-action-acc {
