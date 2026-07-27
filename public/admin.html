@@ -298,9 +298,10 @@
                     <div>
                         <label style="font-size: 0.85rem; color: var(--text-muted);">Loại Sự Kiện</label>
                         <select id="eventTypeInput" class="form-control">
-                            <option value="uu_dai">Ưu đãi</option>
-                            <option value="tham_gia">Tham gia</option>
-                            <option value="khac">Khác</option>
+                            <option value="uu_dai">Giảm Deal (bảng thông báo giảm giá)</option>
+                            <option value="vong_quay">Vòng Quay May Mắn</option>
+                            <option value="dap_tho">Đập Thỏ May Mắn</option>
+                            <option value="dap_hop">Đập Hộp May Mắn</option>
                         </select>
                     </div>
                 </div>
@@ -316,8 +317,9 @@
                     <div>
                         <label style="font-size: 0.85rem; color: var(--text-muted);">Trạng Thái</label>
                         <select id="eventStatusInput" class="form-control">
-                            <option value="an">Ẩn</option>
-                            <option value="hien">Hiển thị</option>
+                            <option value="an">Ẩn hẳn</option>
+                            <option value="hien">Hiển thị (chơi được)</option>
+                            <option value="tam_khoa">Tạm khóa (hiện mờ + thông báo)</option>
                         </select>
                     </div>
                 </div>
@@ -332,8 +334,53 @@
                 <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả Sự Kiện</label>
                 <textarea id="eventDescInput" class="form-control" rows="2" placeholder="Mô tả ngắn về sự kiện, hiện ở banner Shop..."></textarea>
 
+                <div class="subsection-title">Ưu Đãi Giảm Deal (chỉ áp dụng cho loại "Giảm Deal")</div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Giảm Bao Nhiêu % Trên Giá Acc</label>
+                        <input type="number" id="eventDiscountPercentInput" class="form-control" min="0" max="100" step="1" placeholder="VD: 10">
+                    </div>
+                </div>
+                <p class="field-hint">Trong thời gian sự kiện diễn ra, giá của TẤT CẢ acc sẽ tự động gạch giá trực tiếp theo % này cho mọi khách, không cần bấm gì thêm.</p>
+
+                <div class="subsection-title">Giới Hạn Lượt Chơi &amp; Khóa QR (áp dụng cho 3 loại sự kiện tương tác)</div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Giới Hạn Số Lượt Chơi / Tài Khoản</label>
+                        <input type="number" id="eventMaxPlaysInput" class="form-control" min="0" placeholder="VD: 1">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted); display:flex; align-items:center; gap:8px; margin-top: 22px;">
+                            <input type="checkbox" id="eventRequireQrInput" style="width:auto; margin:0;"> Khóa bằng QR (khách phải thanh toán trước khi chơi)
+                        </label>
+                    </div>
+                </div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Số Tiền Yêu Cầu (đ)</label>
+                        <input type="number" id="eventQrAmountInput" class="form-control" min="0" placeholder="VD: 20000">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Ghi Chú Dưới Mã QR</label>
+                        <input type="text" id="eventQrNoteInput" class="form-control" placeholder="VD: Ghi rõ SĐT khi chuyển khoản">
+                    </div>
+                </div>
+                <p class="field-hint">Khi bật, khách phải gửi yêu cầu tham gia sau khi thanh toán — yêu cầu này sẽ chờ Admin duyệt ở mục "Yêu Cầu Tham Gia Sự Kiện" bên dưới trước khi tài khoản đó được phép chơi. Mã QR dùng chung với QR cấu hình hệ thống ở mục Cấu Hình.</p>
+
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Thông Báo Khi Sự Kiện Tạm Khóa / Chưa Đến Ngày</label>
+                <textarea id="eventClosedNoticeInput" class="form-control" rows="2" placeholder="VD: Sự kiện sẽ mở lúc 20h ngày 1/8, quay lại sau nhé!"></textarea>
+
+                <div class="subsection-title">Riêng "Đập Thỏ May Mắn"</div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Tốc Độ Thỏ Nhấp Nhô (ms/lần đổi ô)</label>
+                        <input type="number" id="eventRabbitSpeedInput" class="form-control" min="100" step="50" placeholder="VD: 800">
+                    </div>
+                </div>
+                <p class="field-hint">Số càng nhỏ thỏ càng nhấp nhô nhanh, càng khó đập trúng. Có 6 ô cố định như 1 chiếc giếng.</p>
+
                 <div class="subsection-title">Kho Phần Thưởng (Thêm/Sửa/Xóa, chỉnh tỉ lệ trúng & số lượng)</div>
-                <p class="field-hint">Tỉ lệ (%) của tất cả phần thưởng cộng lại nên ≤ 100 — phần còn lại là "Chúc may mắn lần sau". Hết số lượng thì phần thưởng đó tự động ngừng được trao dù trúng số.</p>
+                <p class="field-hint">Tỉ lệ (%) của tất cả phần thưởng cộng lại nên ≤ 100 — phần còn lại là "Chúc may mắn lần sau". Hết số lượng thì phần thưởng đó tự động ngừng được trao dù trúng số. Phần quà có thể là ảnh hoặc chỉ là văn bản (để trống ảnh).</p>
                 <div id="eventRewardsContainer"></div>
                 <button type="button" class="btn-reset-media" onclick="addRewardRow()">+ Thêm phần thưởng</button>
 
@@ -354,6 +401,30 @@
                         </tr>
                     </thead>
                     <tbody id="adminEventsTableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="subsection-title" style="margin-top: 28px;">
+                Yêu Cầu Tham Gia Sự Kiện (khóa QR)
+                <span id="eventRequestsBadge" class="promo-5-badge" style="display:none; margin-left:8px;">0 chờ duyệt</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+                Khách tham gia sự kiện đang bật "Khóa bằng QR" sẽ gửi yêu cầu ở đây sau khi thanh toán. Duyệt để cấp
+                quyền chơi ngay cho đúng tài khoản/thiết bị đó, hoặc từ chối nếu chưa nhận được thanh toán.
+            </p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sự Kiện</th>
+                            <th>Thiết Bị</th>
+                            <th>Ghi Chú</th>
+                            <th>Thời Gian</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminEventRequestsTableBody"></tbody>
                 </table>
             </div>
         </div>
@@ -395,6 +466,20 @@
                 <input type="text" id="settingSiteName" class="form-control" maxlength="70" placeholder="Shop J-Hush">
                 <p class="field-hint">Tên ngắn gọn hiện kèm bên dưới tiêu đề khi dán link (một số nền tảng như Facebook ưu tiên hiện tên này thay vì domain onrender.com). Zalo thường vẫn hiện domain thật bất kể ô này — muốn đổi hẳn domain thì phải gắn tên miền riêng cho shop, không sửa được bằng cấu hình này.</p>
                 <p class="field-hint">Đổi xong bấm Lưu Cấu Hình là áp dụng ngay, không cần deploy lại code. Riêng preview trên Zalo/Facebook có thể vẫn hiện bản cũ một lúc do họ tự lưu cache — thường tự làm mới sau khi chia sẻ lại link.</p>
+
+                <div class="subsection-title">Vòng Quay May Mắn (tab Ưu Đãi) — quay tháng, reset đầu tháng</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả (hỗ trợ thẻ &lt;b&gt;, &lt;br&gt;)</label>
+                <textarea id="settingPromoSpinDesc" class="form-control" rows="2" placeholder="Mỗi thiết bị được quay 1 lượt / tháng..."></textarea>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tỉ Lệ Trúng (%)</label>
+                <input type="number" id="settingPromoSpinRate" class="form-control" step="0.01" min="0" max="100" placeholder="0.1">
+                <p class="field-hint">Mặc định 0.1% (tức 1/1000). Không sửa mô tả thì tự dùng câu mặc định.</p>
+
+                <div class="subsection-title">Quay Là Trúng (tab riêng) — quay ngày, reset 0h</div>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Mô Tả (hỗ trợ thẻ &lt;b&gt;, &lt;br&gt;)</label>
+                <textarea id="settingFreeSpinDesc" class="form-control" rows="2" placeholder="Quay miễn phí, xác suất trúng acc là 1/1000..."></textarea>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Tỉ Lệ Trúng (%)</label>
+                <input type="number" id="settingFreeSpinRate" class="form-control" step="0.01" min="0" max="100" placeholder="0.1">
+                <p class="field-hint">Mặc định 0.1% (tức 1/1000). Không sửa mô tả thì tự dùng câu mặc định.</p>
 
                 <div class="subsection-title">Thông Tin Chung</div>
                 <label style="font-size: 0.85rem; color: var(--text-muted);">Tiêu Đề Tên Admin (Tab Giới Thiệu)</label>

@@ -355,6 +355,83 @@ body {
     z-index: 10;
 }
 
+/* Đập Thỏ May Mắn */
+.rabbit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    max-width: 320px;
+    margin: 15px auto;
+}
+.rabbit-hole {
+    position: relative;
+    aspect-ratio: 1;
+    background: radial-gradient(ellipse at center, #6b4423 0%, #3d2712 70%);
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid #2a1a0d;
+}
+.rabbit-hole-dirt {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at bottom, rgba(0,0,0,0.5), transparent 70%);
+    pointer-events: none;
+}
+.rabbit-emoji {
+    position: absolute;
+    left: 50%;
+    bottom: -60%;
+    transform: translateX(-50%);
+    font-size: 1.8rem;
+    transition: bottom 0.15s ease-out;
+    user-select: none;
+}
+.rabbit-emoji.rabbit-up { bottom: 10%; }
+.rabbit-emoji.rabbit-miss { animation: rabbit-shake 0.3s ease; }
+@keyframes rabbit-shake {
+    0%, 100% { transform: translateX(-50%) rotate(0deg); }
+    25% { transform: translateX(-50%) rotate(-10deg); }
+    75% { transform: translateX(-50%) rotate(10deg); }
+}
+
+/* Đập Hộp May Mắn */
+.lucky-box-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 320px;
+    margin: 15px auto;
+}
+.lucky-box {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, var(--gold), #b8860b);
+    border-radius: 10px;
+    font-size: 1.8rem;
+    color: #1a1200;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+.lucky-box:hover { transform: scale(1.05); }
+.lucky-box.box-shaking { animation: box-shake 0.15s ease-in-out infinite; }
+.lucky-box.box-opened {
+    background: rgba(255,255,255,0.05);
+    border: 1px dashed var(--card-border);
+    cursor: default;
+    transform: none;
+}
+@keyframes box-shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-6deg); }
+    75% { transform: rotate(6deg); }
+}
+
+/* Sự kiện tạm đóng / chưa tới ngày diễn ra: hiện mờ + thông báo hướng dẫn */
+.event-locked-card { opacity: 0.6; filter: grayscale(0.4); }
+
 /* Tab Giới Thiệu (Intro Dual Grid) */
 .intro-dual-grid {
     display: grid;

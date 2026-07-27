@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderPromoWheelStatus(); // trạng thái vòng quay ưu đãi (1 lượt/tháng/thiết bị)
     renderFreeSpinStatus();   // trạng thái vòng quay acc random free (1 lượt/ngày/thiết bị)
     renderShopEventBanners(); // banner sự kiện đang hoạt động (tab Shop)
-    renderEventWheels();      // vòng quay riêng cho từng sự kiện (tab Quay Là Trúng)
+    renderEventGames();       // 3 trò chơi tương tác riêng cho từng sự kiện (tab Quay Là Trúng)
     startMusicSync();         // tự động cập nhật nhạc nền khi admin đổi, không cần tải lại trang
 });
 
@@ -404,8 +404,13 @@ async function spinFreeWheel() {
 }
 
 // ============================================================
-// SỰ KIỆN (mục 6) — mỗi sự kiện admin tạo sẽ tự sinh 1 banner ở tab Shop
-// và 1 vòng quay độc lập ở tab "Quay Là Trúng".
+// SỰ KIỆN (Giai đoạn 2) — 4 loại sự kiện dùng chung 1 tầng dữ liệu nhưng khác giao diện:
+//   - uu_dai   : CHỈ là 1 bảng thông báo giảm giá ở tab Shop, không phải trò chơi.
+//   - vong_quay: vòng quay may mắn.
+//   - dap_tho  : đập thỏ nhấp nhô trong các ô/giếng.
+//   - dap_hop  : đập hộp quà trong lưới.
+// Cả 3 loại tương tác đều dùng chung: giới hạn tổng lượt chơi (maxPlays/playsUsed) và khóa QR
+// (requireQr) — khách phải thanh toán rồi gửi yêu cầu, chờ Admin duyệt mới được chơi.
 // ============================================================
 function renderShopEventBanners() {
     const container = document.getElementById('shopEventsBanner');
@@ -413,54 +418,181 @@ function renderShopEventBanners() {
     const events = getEvents();
     if (events.length === 0) { container.innerHTML = ''; return; }
 
-    container.innerHTML = events.map(ev => `
+    container.innerHTML = events.map(ev => {
+        if (ev.displayState !== 'active' && ev.displayState !== 'locked') return '';
+
+        // Sự kiện Giảm Deal: chỉ hiện bảng thông báo, KHÔNG dẫn sang trò chơi.
+        if (ev.type === 'uu_dai') {
+            if (ev.displayState !== 'active') return ''; // Giảm Deal không có trạng thái "tạm khóa hiện mờ"
+            return `
+            <div class="hover-card" style="padding:16px; display:flex; align-items:center; gap:14px; margin-bottom:14px; border-color:var(--gold);">
+                ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" loading="lazy" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-fire icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
+                <div>
+                    <div style="font-weight:800;">${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin:0 0 0 6px; padding:2px 10px; font-size:0.7rem; cursor:default;">Giảm ${Number(ev.discountPercent) || 0}%</span></div>
+                    <div style="font-size:0.85rem; color: var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Giá sẽ tự động được gạch giảm khi đặt mua trong thời gian sự kiện.')}</div>
+                </div>
+            </div>`;
+        }
+
+        // 3 sự kiện tương tác: banner dẫn sang tab "Quay Là Trúng" để chơi.
+        return `
         <div class="hover-card" style="padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer; margin-bottom:14px;"
              onclick="switchTab('randomTab', document.querySelectorAll('.nav-link')[1]); window.scrollTo({top:0,behavior:'smooth'});">
             ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" loading="lazy" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-gift icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
             <div>
                 <div style="font-weight:800;">${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin:0 0 0 6px; padding:2px 10px; font-size:0.7rem;">${escapeHtml(EVENT_TYPE_LABELS[ev.type] || 'Sự kiện')}</span></div>
-                <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Bấm để sang vòng quay sự kiện!')}</div>
+                <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Bấm để tham gia sự kiện!')}</div>
             </div>
-        </div>
-    `).join('');
-}
-
-let _spinningEvents = {};
-
-function renderEventWheels() {
-    const container = document.getElementById('eventWheelsContainer');
-    if (!container) return;
-    const events = getEvents();
-    if (events.length === 0) { container.innerHTML = ''; return; }
-
-    container.innerHTML = events.map(ev => {
-        const state = (_deviceStatus.events && _deviceStatus.events[ev.id]) || { spun: false, won: false };
-        const sliceClasses = ['slice-1', 'slice-2', 'slice-3', 'slice-4', 'slice-5', 'slice-6'];
-        const wheelSlices = ev.rewards.slice(0, 6).map((r, i) => `<div class="wheel-slice ${sliceClasses[i % 6]}"><span>${escapeHtml(r.name.slice(0, 10))}</span></div>`).join('');
-        return `
-        <div class="hover-card promo-box" style="margin-top:20px;">
-            <i class="fa-solid fa-star icon-wheel-anim" style="font-size: 2.2rem; color: var(--gold); margin-bottom: 10px;"></i>
-            <h3>${escapeHtml(ev.name)}</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 15px;">${escapeHtml(ev.description || '')}</p>
-            <div class="wheel-container">
-                <div class="wheel-pointer"></div>
-                <div class="wheel-circle" id="eventWheel_${ev.id}">${wheelSlices}</div>
-            </div>
-            <p id="eventStatus_${ev.id}" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 12px;">
-                ${state.spun ? (state.won ? 'Bạn đã trúng thưởng sự kiện này hôm nay! Liên hệ Zalo Admin để nhận.' : 'Bạn đã dùng lượt quay sự kiện hôm nay, hẹn gặp lại ngày mai.') : 'Bạn còn 1 lượt quay sự kiện hôm nay.'}
-            </p>
-            <button class="btn-submit pulse-anim" style="margin-top: 15px;" ${state.spun ? 'disabled' : ''} onclick="spinEventWheelUI('${ev.id}')" id="eventSpinBtn_${ev.id}">Quay Sự Kiện</button>
         </div>`;
     }).join('');
 }
 
-async function spinEventWheelUI(eventId) {
-    if (_spinningEvents[eventId]) return;
-    const state = (_deviceStatus.events && _deviceStatus.events[eventId]) || { spun: false };
-    if (state.spun) return;
+// eventId -> true trong lúc đang chờ máy chủ trả kết quả (chặn bấm đúp / đập đúp)
+let _eventGameBusy = {};
+// eventId -> { interval, activeIndex } — timer thỏ nhấp nhô đang chạy, phải dọn dẹp mỗi lần render lại
+let _activeRabbitTimers = {};
+let _currentEventQrId = null;
 
-    _spinningEvents[eventId] = true;
-    const btn = document.getElementById(`eventSpinBtn_${eventId}`);
+function renderEventGames() {
+    const container = document.getElementById('eventWheelsContainer');
+    if (!container) return;
+
+    // Dọn hết timer thỏ cũ trước khi thay DOM, tránh rò rỉ interval trỏ tới phần tử đã mất.
+    Object.values(_activeRabbitTimers).forEach(t => t && t.interval && clearInterval(t.interval));
+    _activeRabbitTimers = {};
+
+    const events = getEvents().filter(ev => ev.type !== 'uu_dai');
+    if (events.length === 0) { container.innerHTML = ''; return; }
+
+    container.innerHTML = events.map(renderEventCardShell).join('');
+
+    events.forEach(ev => {
+        if (ev.displayState !== 'active') return;
+        const evStatus = _deviceStatus.events && _deviceStatus.events[ev.id];
+        const needsAccess = ev.requireQr && (!evStatus || evStatus.requestStatus !== 'approved');
+        if (needsAccess) return;
+        const maxPlays = (evStatus && evStatus.maxPlays) || Number(ev.maxPlays) || 1;
+        const playsUsed = (evStatus && evStatus.playsUsed) || 0;
+        if (playsUsed >= maxPlays) return;
+        if (ev.type === 'dap_tho') startRabbitGame(ev);
+    });
+}
+
+function renderEventCardShell(ev) {
+    const evStatus = (_deviceStatus.events && _deviceStatus.events[ev.id]) || { playsUsed: 0, maxPlays: Number(ev.maxPlays) || 1, requestStatus: 'none' };
+    const header = `
+        <h3>${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin-left:6px;padding:2px 10px;font-size:0.7rem;cursor:default;">${escapeHtml(EVENT_TYPE_LABELS[ev.type] || '')}</span></h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 15px;">${escapeHtml(ev.description || '')}</p>`;
+
+    // Sự kiện tạm đóng / chưa tới ngày diễn ra: hiện mờ + thông báo hướng dẫn, không cho chơi.
+    if (ev.displayState === 'locked') {
+        return `
+        <div class="hover-card promo-box event-locked-card" style="margin-top:20px;">
+            <i class="fa-solid fa-lock" style="font-size:2rem;color:var(--text-muted);margin-bottom:10px;"></i>
+            ${header}
+            <p style="font-size:0.85rem; color:#f97316; background:rgba(249,115,22,0.1); border:1px solid #f97316; border-radius:8px; padding:10px;">
+                <i class="fa-solid fa-circle-info"></i> ${escapeHtml(ev.closedNoticeText || 'Sự kiện hiện đang tạm đóng, vui lòng quay lại sau.')}
+            </p>
+        </div>`;
+    }
+
+    // Khóa bằng QR: khách chưa được duyệt truy cập -> hiện luồng thanh toán + gửi yêu cầu.
+    if (ev.requireQr && evStatus.requestStatus !== 'approved') {
+        let body;
+        if (evStatus.requestStatus === 'pending') {
+            body = `<p style="font-size:0.85rem;color:var(--gold);background:rgba(255,193,7,0.08);border:1px solid var(--gold);border-radius:8px;padding:10px;"><i class="fa-solid fa-hourglass-half"></i> Yêu cầu tham gia của bạn đang chờ Admin duyệt. Vui lòng quay lại sau ít phút.</p>`;
+        } else if (evStatus.requestStatus === 'rejected') {
+            body = `<p style="font-size:0.85rem;color:#ef4444;background:rgba(239,68,68,0.08);border:1px solid #ef4444;border-radius:8px;padding:10px;margin-bottom:10px;"><i class="fa-solid fa-circle-xmark"></i> Yêu cầu trước đó đã bị từ chối. Vui lòng kiểm tra lại giao dịch rồi gửi lại yêu cầu.</p>
+                <button class="btn-submit" onclick="openEventQrModal('${ev.id}')">Gửi Lại Yêu Cầu Tham Gia</button>`;
+        } else {
+            body = `<p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">Sự kiện này yêu cầu thanh toán trước khi tham gia.</p>
+                <button class="btn-submit pulse-anim" onclick="openEventQrModal('${ev.id}')">Thanh Toán &amp; Yêu Cầu Tham Gia</button>`;
+        }
+        return `<div class="hover-card promo-box" style="margin-top:20px;">${header}${body}</div>`;
+    }
+
+    const maxPlays = evStatus.maxPlays || Number(ev.maxPlays) || 1;
+    const playsUsed = evStatus.playsUsed || 0;
+    const playsLeft = Math.max(0, maxPlays - playsUsed);
+    const statusLine = `<p style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;">Còn ${playsLeft}/${maxPlays} lượt chơi.</p>`;
+
+    if (playsLeft <= 0) {
+        return `<div class="hover-card promo-box" style="margin-top:20px;">${header}
+            <p style="font-size:0.85rem;color:var(--text-muted);">Bạn đã dùng hết lượt chơi của sự kiện này. Cảm ơn bạn đã tham gia!</p>
+        </div>`;
+    }
+
+    if (ev.type === 'vong_quay') {
+        const sliceClasses = ['slice-1', 'slice-2', 'slice-3', 'slice-4', 'slice-5', 'slice-6'];
+        const wheelSlices = ev.rewards.slice(0, 6).map((r, i) => `<div class="wheel-slice ${sliceClasses[i % 6]}"><span>${escapeHtml((r.name || '').slice(0, 10))}</span></div>`).join('');
+        return `<div class="hover-card promo-box" style="margin-top:20px;">
+            ${header}
+            <div class="wheel-container">
+                <div class="wheel-pointer"></div>
+                <div class="wheel-circle" id="eventWheel_${ev.id}">${wheelSlices}</div>
+            </div>
+            <p id="eventStatus_${ev.id}" style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">Bấm để quay thử vận may!</p>
+            <button class="btn-submit pulse-anim" style="margin-top:15px;" onclick="playEventWheel('${ev.id}')" id="eventPlayBtn_${ev.id}">Quay Sự Kiện</button>
+            ${statusLine}
+        </div>`;
+    }
+
+    if (ev.type === 'dap_tho') {
+        const holes = Number(ev.rabbitHoles) || 6;
+        const holeCells = Array.from({ length: holes }, (_, i) => `
+            <div class="rabbit-hole" data-hole="${i}" onclick="handleRabbitHoleClick('${ev.id}', ${i})">
+                <div class="rabbit-hole-dirt"></div>
+                <div class="rabbit-emoji" id="rabbit_${ev.id}_${i}">🐰</div>
+            </div>`).join('');
+        return `<div class="hover-card promo-box" style="margin-top:20px;">
+            ${header}
+            <div class="rabbit-grid" id="rabbitGrid_${ev.id}">${holeCells}</div>
+            <p id="eventStatus_${ev.id}" style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">Nhanh tay đập trúng chú thỏ đang nhấp nhô!</p>
+            ${statusLine}
+        </div>`;
+    }
+
+    if (ev.type === 'dap_hop') {
+        const boxes = Number(ev.boxCount) || 6;
+        const boxCells = Array.from({ length: boxes }, (_, i) => `
+            <div class="lucky-box" id="box_${ev.id}_${i}" data-box="${i}" onclick="handleBoxClick('${ev.id}', ${i})"><i class="fa-solid fa-gift"></i></div>`).join('');
+        return `<div class="hover-card promo-box" style="margin-top:20px;">
+            ${header}
+            <div class="lucky-box-grid" id="boxGrid_${ev.id}">${boxCells}</div>
+            <p id="eventStatus_${ev.id}" style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">Chọn 1 hộp quà may mắn bất kỳ!</p>
+            ${statusLine}
+        </div>`;
+    }
+
+    return '';
+}
+
+// Ghi kết quả 1 lượt chơi (dùng chung cho cả 3 loại game) vào cache trạng thái thiết bị,
+// báo cho khách biết trúng/trượt, rồi vẽ lại toàn bộ khối sự kiện (tự sinh lượt chơi mới nếu còn).
+function applyEventPlayResult(eventId, result, statusEl) {
+    if (!_deviceStatus.events) _deviceStatus.events = {};
+    const prevStatus = _deviceStatus.events[eventId] || {};
+    _deviceStatus.events[eventId] = {
+        playsUsed: result.playsUsed != null ? result.playsUsed : prevStatus.playsUsed,
+        maxPlays: result.maxPlays != null ? result.maxPlays : prevStatus.maxPlays,
+        requestStatus: prevStatus.requestStatus || 'none'
+    };
+
+    if (result.limitReached) {
+        if (statusEl) statusEl.textContent = 'Bạn đã dùng hết lượt chơi của sự kiện này.';
+    } else if (result.won && result.prize) {
+        alert(`🎉 Chúc mừng! Bạn đã trúng "${result.prize.name}" từ sự kiện! Liên hệ Zalo Admin để nhận thưởng.`);
+    } else {
+        alert('Chúc bạn may mắn lần sau!');
+    }
+    renderEventGames();
+}
+
+// --- Vòng Quay May Mắn ---
+async function playEventWheel(eventId) {
+    if (_eventGameBusy[eventId]) return;
+    _eventGameBusy[eventId] = true;
+    const btn = document.getElementById(`eventPlayBtn_${eventId}`);
     const wheel = document.getElementById(`eventWheel_${eventId}`);
     const status = document.getElementById(`eventStatus_${eventId}`);
     if (btn) btn.disabled = true;
@@ -471,21 +603,147 @@ async function spinEventWheelUI(eventId) {
     try {
         const result = await spinEventWheelApi(eventId);
         setTimeout(() => {
-            _spinningEvents[eventId] = false;
-            if (!_deviceStatus.events) _deviceStatus.events = {};
-            _deviceStatus.events[eventId] = { spun: true, won: result.won };
-            if (result.won && result.prize) {
-                alert(`🎉 Chúc mừng! Bạn đã trúng "${result.prize.name}" từ sự kiện! Liên hệ Zalo Admin để nhận thưởng.`);
-                if (status) status.textContent = 'Bạn đã trúng thưởng sự kiện này hôm nay! Liên hệ Zalo Admin để nhận.';
-            } else {
-                alert('Chúc bạn may mắn lần sau! Hẹn gặp lại ngày mai.');
-                if (status) status.textContent = 'Bạn đã dùng lượt quay sự kiện hôm nay, hẹn gặp lại ngày mai.';
-            }
+            _eventGameBusy[eventId] = false;
+            applyEventPlayResult(eventId, result, status);
         }, 4000);
     } catch (err) {
-        _spinningEvents[eventId] = false;
+        _eventGameBusy[eventId] = false;
         if (btn) btn.disabled = false;
-        alert('Không thể kết nối máy chủ để quay thưởng: ' + err.message);
+        alert('Không thể kết nối máy chủ: ' + err.message);
+    }
+}
+
+// --- Đập Thỏ May Mắn: thỏ tự nhảy giữa các ô mỗi rabbitSpeedMs, khách phải đập đúng ô đang có thỏ ---
+function startRabbitGame(ev) {
+    const holes = Number(ev.rabbitHoles) || 6;
+    const speed = Number(ev.rabbitSpeedMs) || 800;
+    let activeIndex = -1;
+
+    function moveRabbit() {
+        const grid = document.getElementById(`rabbitGrid_${ev.id}`);
+        if (!grid) { clearInterval(timer); return; } // thẻ đã bị vẽ lại/gỡ khỏi DOM
+        if (activeIndex >= 0) {
+            const prevEl = document.getElementById(`rabbit_${ev.id}_${activeIndex}`);
+            if (prevEl) prevEl.classList.remove('rabbit-up');
+        }
+        let next = Math.floor(Math.random() * holes);
+        if (holes > 1) { while (next === activeIndex) next = Math.floor(Math.random() * holes); }
+        activeIndex = next;
+        const el = document.getElementById(`rabbit_${ev.id}_${activeIndex}`);
+        if (el) el.classList.add('rabbit-up');
+    }
+
+    const timer = setInterval(moveRabbit, speed);
+    moveRabbit();
+    _activeRabbitTimers[ev.id] = { interval: timer, get activeIndex() { return activeIndex; } };
+}
+
+async function handleRabbitHoleClick(eventId, holeIndex) {
+    if (_eventGameBusy[eventId]) return;
+    const t = _activeRabbitTimers[eventId];
+    if (!t || t.activeIndex !== holeIndex) {
+        // Đập hụt: rung nhẹ để phản hồi, thỏ vẫn tiếp tục nhảy bình thường, không tốn lượt chơi.
+        const el = document.getElementById(`rabbit_${eventId}_${holeIndex}`);
+        if (el) { el.classList.add('rabbit-miss'); setTimeout(() => el.classList.remove('rabbit-miss'), 300); }
+        return;
+    }
+
+    _eventGameBusy[eventId] = true;
+    clearInterval(t.interval);
+    delete _activeRabbitTimers[eventId];
+    const status = document.getElementById(`eventStatus_${eventId}`);
+    if (status) status.textContent = 'Đang xử lý...';
+
+    try {
+        const result = await spinEventWheelApi(eventId);
+        _eventGameBusy[eventId] = false;
+        applyEventPlayResult(eventId, result, status);
+    } catch (err) {
+        _eventGameBusy[eventId] = false;
+        alert('Không thể kết nối máy chủ: ' + err.message);
+    }
+}
+
+// --- Đập Hộp May Mắn: khách chọn 1 hộp bất kỳ trong lưới ---
+async function handleBoxClick(eventId, boxIndex) {
+    if (_eventGameBusy[eventId]) return;
+    const boxEl = document.getElementById(`box_${eventId}_${boxIndex}`);
+    if (boxEl && boxEl.classList.contains('box-opened')) return;
+    _eventGameBusy[eventId] = true;
+    if (boxEl) boxEl.classList.add('box-shaking');
+
+    try {
+        const result = await spinEventWheelApi(eventId);
+        setTimeout(() => {
+            if (boxEl) {
+                boxEl.classList.remove('box-shaking');
+                boxEl.classList.add('box-opened');
+                boxEl.innerHTML = (result.won && result.prize)
+                    ? '<i class="fa-solid fa-trophy" style="color:var(--gold);"></i>'
+                    : '<i class="fa-solid fa-face-sad-tear"></i>';
+            }
+            _eventGameBusy[eventId] = false;
+            const status = document.getElementById(`eventStatus_${eventId}`);
+            applyEventPlayResult(eventId, result, status);
+        }, 600);
+    } catch (err) {
+        _eventGameBusy[eventId] = false;
+        if (boxEl) boxEl.classList.remove('box-shaking');
+        alert('Không thể kết nối máy chủ: ' + err.message);
+    }
+}
+
+// --- Khóa QR: mở modal thanh toán + gửi yêu cầu tham gia (dùng chung QR admin đã cấu hình) ---
+function buildQrImageUrl(amount, note) {
+    const settings = getSettings();
+    if (settings.qrImageUrl) return resolveMediaSrc(settings.qrImageUrl, '');
+    const bankName = settings.bankName || 'MB';
+    const bankAcc = settings.bankAcc || '0362062410';
+    return `https://img.vietqr.io/image/${encodeURIComponent(bankName)}-${encodeURIComponent(bankAcc)}-compact2.png?amount=${Number(amount) || 0}&addInfo=${encodeURIComponent(note)}&accountName=${encodeURIComponent(settings.bankOwner || 'VU HUY DUC')}`;
+}
+
+function openEventQrModal(eventId) {
+    const ev = getEvents().find(e => e.id === eventId);
+    if (!ev) return;
+    _currentEventQrId = eventId;
+    const note = ev.qrNote || `Tham gia ${ev.name}`;
+
+    document.getElementById('eventQrTitle').innerHTML = `<i class="fa-solid fa-qrcode"></i> Tham Gia "${escapeHtml(ev.name)}"`;
+    document.getElementById('eventQrImg').src = buildQrImageUrl(ev.qrAmount, note);
+    document.getElementById('eventQrAmountText').textContent = `Số tiền: ${formatVND(ev.qrAmount || 0)}`;
+    document.getElementById('eventQrNoteText').textContent = ev.qrNote ? `Ghi chú: ${ev.qrNote}` : '';
+    document.getElementById('eventQrMsg').textContent = '';
+
+    const btn = document.getElementById('eventQrSubmitBtn');
+    btn.disabled = false;
+    btn.textContent = 'Đã Chuyển Khoản - Gửi Yêu Cầu Tham Gia';
+
+    document.getElementById('eventQrModal').classList.add('active');
+}
+
+function closeEventQrModal() {
+    document.getElementById('eventQrModal').classList.remove('active');
+    _currentEventQrId = null;
+}
+
+async function submitEventAccessRequest() {
+    if (!_currentEventQrId) return;
+    const eventId = _currentEventQrId;
+    const btn = document.getElementById('eventQrSubmitBtn');
+    btn.disabled = true;
+
+    try {
+        const result = await requestEventAccessApi(eventId, '');
+        if (!_deviceStatus.events) _deviceStatus.events = {};
+        const prev = _deviceStatus.events[eventId] || {};
+        _deviceStatus.events[eventId] = { ...prev, requestStatus: result.requestStatus };
+        document.getElementById('eventQrMsg').textContent = 'Đã gửi yêu cầu! Vui lòng chờ Admin duyệt (thường trong ít phút).';
+        btn.textContent = 'Đã Gửi Yêu Cầu';
+        renderEventGames();
+        setTimeout(closeEventQrModal, 1800);
+    } catch (err) {
+        btn.disabled = false;
+        document.getElementById('eventQrMsg').textContent = 'Lỗi: ' + err.message;
     }
 }
 
@@ -638,19 +896,37 @@ function setTypeFilter(type, btnElement) {
 let currentBuyingCode = '';
 let currentBuyingPrice = 0;
 let currentDiscountApplied = false;
+let currentDiscountSource = null; // 'device' (mã giảm 5%/thiết bị) | 'deal' (sự kiện Giảm Deal) | null
+let currentDiscountPercent = 0;
 
 // Nhận vào mã acc, tự tra cứu đầy đủ dữ liệu (thông tin, mô tả, loại, giá) để hiển thị
-// tách biệt "thông tin acc" và "mô tả acc" thay vì gộp chung, đồng thời tự áp mã giảm 5%
-// (nếu thiết bị còn hiệu lực và acc không phải loại Reg) và dùng QR admin tự tải lên nếu có.
+// tách biệt "thông tin acc" và "mô tả acc" thay vì gộp chung, đồng thời tự áp ưu đãi tốt nhất
+// đang có: mã giảm 5%/thiết bị (không áp cho Acc Reg, dùng 1 lần) HOẶC % của sự kiện "Giảm Deal"
+// đang hoạt động (áp cho mọi loại acc) — lấy % nào cao hơn. Nếu sự kiện Giảm Deal đã đủ tốt,
+// KHÔNG tiêu mã 5% của thiết bị để dành cho lần mua sau không có sự kiện.
 function openBuyModal(code) {
     const acc = getAccounts().find(a => a.code === code);
     if (!acc) return;
 
     currentBuyingCode = acc.code;
 
-    const eligibleDiscount = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
-    currentDiscountApplied = eligibleDiscount;
-    const finalPrice = eligibleDiscount ? Math.round(acc.price * 0.95) : acc.price;
+    const deviceEligible = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
+    const devicePercent = deviceEligible ? 5 : 0;
+    const dealEvent = getBestActiveDealEvent();
+    const dealPercent = dealEvent ? Number(dealEvent.discountPercent) || 0 : 0;
+
+    if (dealPercent >= devicePercent && dealPercent > 0) {
+        currentDiscountSource = 'deal';
+        currentDiscountPercent = dealPercent;
+    } else if (devicePercent > 0) {
+        currentDiscountSource = 'device';
+        currentDiscountPercent = devicePercent;
+    } else {
+        currentDiscountSource = null;
+        currentDiscountPercent = 0;
+    }
+    currentDiscountApplied = currentDiscountSource !== null;
+    const finalPrice = currentDiscountApplied ? Math.round(acc.price * (1 - currentDiscountPercent / 100)) : acc.price;
     currentBuyingPrice = finalPrice;
 
     const settings = getSettings();
@@ -665,9 +941,12 @@ function openBuyModal(code) {
 
     const originalPriceEl = document.getElementById('modalOriginalPrice');
     const discountNoteEl = document.getElementById('modalDiscountNote');
-    if (eligibleDiscount) {
+    if (currentDiscountApplied) {
         originalPriceEl.textContent = formatVND(acc.price);
         originalPriceEl.style.display = 'inline';
+        discountNoteEl.innerHTML = currentDiscountSource === 'deal'
+            ? `<i class="fa-solid fa-tags"></i> Đã áp dụng ưu đãi "${escapeHtml(dealEvent.name)}" - giảm ${currentDiscountPercent}%.`
+            : `<i class="fa-solid fa-tags"></i> Đã áp dụng mã giảm giá ${currentDiscountPercent}% (chỉ dùng được 1 lần / thiết bị).`;
         discountNoteEl.style.display = 'block';
     } else {
         originalPriceEl.style.display = 'none';
@@ -692,7 +971,9 @@ function closeModal() {
 }
 
 async function confirmPaymentZalo() {
-    if (currentDiscountApplied) {
+    // Chỉ tiêu mã giảm 5%/thiết bị khi đó thực sự là nguồn giảm giá được áp dụng — nếu ưu đãi
+    // đến từ sự kiện "Giảm Deal" thì để dành mã 5% cho lần mua sau (không có sự kiện).
+    if (currentDiscountSource === 'device') {
         try {
             await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
             _deviceStatus.discountUsed = true;
@@ -702,12 +983,12 @@ async function confirmPaymentZalo() {
         }
     }
 
-    const discountNote = currentDiscountApplied ? ' (đã áp giảm 5%)' : '';
+    const discountNote = currentDiscountApplied ? ` (đã áp giảm ${currentDiscountPercent}%)` : '';
     alert(`Đã ghi nhận yêu cầu mua mã tài khoản [${currentBuyingCode}]${discountNote}. Hệ thống sẽ chuyển hướng bạn sang Zalo Admin để xác thực giao dịch chuyển khoản. Lưu ý chuyển đúng số tiền: ${formatVND(currentBuyingPrice)}.`);
 
     const zaloUrl = (getSettings().socialLinks && getSettings().socialLinks.zalo) || 'https://zalo.me/0362062410';
     const separator = zaloUrl.includes('?') ? '&' : '?';
-    const text = encodeURIComponent(`Admin oi, toi da thanh toan don hang ${currentBuyingCode} gia ${currentBuyingPrice}d${currentDiscountApplied ? ' (da ap giam 5%)' : ''}`);
+    const text = encodeURIComponent(`Admin oi, toi da thanh toan don hang ${currentBuyingCode} gia ${currentBuyingPrice}d${currentDiscountApplied ? ` (da ap giam ${currentDiscountPercent}%)` : ''}`);
     window.open(`${zaloUrl}${separator}text=${text}`, '_blank');
     closeModal();
 }

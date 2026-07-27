@@ -48,7 +48,6 @@
             <a href="#" class="nav-link active" onclick="switchTab('introTab', this)"><i class="fa-solid fa-circle-info"></i> Giới Thiệu</a>
             <a href="#" class="nav-link" onclick="switchTab('shopTab', this)"><i class="fa-solid fa-store"></i> Lựa Acc Có Sẵn</a>
             <a href="#" class="nav-link" onclick="switchTab('formTab', this)"><i class="fa-solid fa-file-pen"></i> Đăng Kí Mua Acc</a>
-            <a href="admin.html" class="nav-link admin-nav-btn"><i class="fa-solid fa-shield-halved"></i> Quản Trị</a>
             <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()"><i class="fa-solid fa-sun"></i> Sáng</button>
         </nav>
     </header>
@@ -69,7 +68,7 @@
                 <div class="promo-box hover-card">
                     <i class="fa-solid fa-dharmachakra icon-wheel-anim" style="font-size: 2.5rem; color: var(--accent-blue); margin-bottom: 12px;"></i>
                     <h3>Vòng Quay May Mắn (Wheel Deal)</h3>
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">Mỗi thiết bị được quay <b>1 lượt / tháng</b>, xác suất trúng phần thưởng lớn là <b>1/1000</b> (minh bạch, reset vào đầu tháng sau).</p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">__PROMO_SPIN_DESC__</p>
                     <div class="wheel-container">
                         <div class="wheel-pointer"></div>
                         <div class="wheel-circle" id="wheelCircle">
@@ -93,10 +92,7 @@
                 <div class="promo-box hover-card">
                     <i class="fa-solid fa-dice icon-wheel-anim" style="font-size: 2.5rem; color: var(--gold); margin-bottom: 12px;"></i>
                     <h3>Quay Là Trúng</h3>
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">
-                        Quay miễn phí, xác suất trúng acc là <b>1/1000</b>, minh bạch tuyệt đối. Mỗi thiết bị chỉ được quay
-                        <b>1 lần / ngày</b> (reset lúc 0h). Trúng thưởng là nhận thông tin acc ngay lập tức bên dưới.
-                    </p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">__FREE_SPIN_DESC__</p>
                     <div class="wheel-container">
                         <div class="wheel-pointer"></div>
                         <div class="wheel-circle" id="freeWheelCircle">
@@ -232,6 +228,22 @@
 
     </main>
 
+    <!-- Modal Yêu Cầu Tham Gia Sự Kiện (khóa QR) -->
+    <div class="modal-overlay" id="eventQrModal">
+        <div class="modal-card animate-pop">
+            <button class="btn-close-modal" onclick="closeEventQrModal()">&times;</button>
+            <h3 id="eventQrTitle" style="margin-bottom: 10px;"><i class="fa-solid fa-qrcode"></i> Tham Gia Sự Kiện</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Quét mã QR bên dưới để thanh toán, sau đó bấm nút xác nhận để gửi yêu cầu tham gia cho Admin duyệt.</p>
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 12px; text-align: center;">
+                <img id="eventQrImg" src="" alt="QR thanh toán sự kiện" style="width: 180px; height: 180px; object-fit: contain; border-radius: 6px; background: white; padding: 5px;">
+                <div style="margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: var(--gold);" id="eventQrAmountText"></div>
+                <div style="margin-top: 4px; font-size: 0.8rem; color: var(--text-muted);" id="eventQrNoteText"></div>
+            </div>
+            <button class="btn-submit" onclick="submitEventAccessRequest()" id="eventQrSubmitBtn">Đã Chuyển Khoản - Gửi Yêu Cầu Tham Gia</button>
+            <p id="eventQrMsg" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;"></p>
+        </div>
+    </div>
+
     <!-- Modal Thanh Toán QR Tự Động -->
     <div class="modal-overlay" id="buyModal">
         <div class="modal-card animate-pop">
@@ -279,7 +291,6 @@
             <a href="#" onclick="switchTab('introTab', document.querySelectorAll('.nav-link')[2])">Giới Thiệu</a>
             <a href="#" onclick="switchTab('shopTab', document.querySelectorAll('.nav-link')[3])">Lựa Acc</a>
             <a href="#" onclick="switchTab('formTab', document.querySelectorAll('.nav-link')[4])">Đăng Kí</a>
-            <a href="admin.html">Quản Trị</a>
         </div>
     </footer>
 

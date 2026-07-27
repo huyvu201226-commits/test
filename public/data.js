@@ -18,11 +18,22 @@ const ACCOUNT_TYPE_LABELS = {
 
 const DEFAULT_LOGO = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100";
 
-// Nhãn loại sự kiện (mục 6 — Quản lý Sự kiện)
+// Nhãn loại sự kiện (mục 6 — Quản lý Sự kiện). Giai đoạn 2: 4 loại sự kiện dùng chung 1 tầng
+// hạ tầng (thời gian, kho quà, khóa QR, giới hạn lượt chơi) nhưng khác nhau ở giao diện chơi.
 const EVENT_TYPE_LABELS = {
-    uu_dai: 'Ưu đãi',
+    uu_dai: 'Giảm Deal',
+    vong_quay: 'Vòng Quay May Mắn',
+    dap_tho: 'Đập Thỏ May Mắn',
+    dap_hop: 'Đập Hộp May Mắn',
     tham_gia: 'Tham gia',
     khac: 'Khác'
+};
+
+// Nhãn trạng thái yêu cầu tham gia sự kiện (khóa QR)
+const EVENT_REQUEST_STATUS_LABELS = {
+    pending: { text: 'Chờ duyệt', badge: 'badge-sold' },
+    approved: { text: 'Đã duyệt', badge: 'badge-selling' },
+    rejected: { text: 'Đã từ chối', badge: 'badge-hacked' }
 };
 
 // ------------------------------------------------------------
@@ -33,12 +44,14 @@ let _accountsCache = [];
 let _freeAccountsCache = [];
 let _settingsCache = {};
 let _eventsCache = [];
+let _eventRequestsCache = [];
 let _activityLogCache = [];
 
 function getAccounts() { return _accountsCache; }
 function getFreeAccounts() { return _freeAccountsCache; }
 function getSettings() { return _settingsCache; }
 function getEvents() { return _eventsCache; }
+function getEventRequests() { return _eventRequestsCache; }
 function getActivityLog() { return _activityLogCache; }
 
 // ------------------------------------------------------------
@@ -91,6 +104,7 @@ async function initAdminData() {
     _freeAccountsCache = state.freeAccounts;
     _settingsCache = state.settings;
     _eventsCache = state.events;
+    _eventRequestsCache = state.eventRequests || [];
     _activityLogCache = state.activityLog;
     return state;
 }
@@ -230,6 +244,15 @@ function isEligibleForDiscount(acc, discountUsed) {
     return !!acc && acc.type !== 'reg' && !discountUsed;
 }
 
+// Sự kiện "Giảm Deal" (uu_dai) đang hoạt động có % giảm cao nhất — áp dụng cho MỌI loại acc
+// (không loại trừ Acc Reg như mã giảm 5% theo thiết bị). Nếu có nhiều sự kiện Giảm Deal cùng
+// hoạt động, lấy sự kiện có % giảm cao nhất để khách luôn được hưởng ưu đãi tốt nhất.
+function getBestActiveDealEvent() {
+    const deals = getEvents().filter(ev => ev.type === 'uu_dai' && ev.displayState === 'active' && Number(ev.discountPercent) > 0);
+    if (deals.length === 0) return null;
+    return deals.reduce((best, ev) => (Number(ev.discountPercent) > Number(best.discountPercent) ? ev : best), deals[0]);
+}
+
 // ------------------------------------------------------------
 // SỰ KIỆN (mục 6) — mỗi sự kiện là 1 vòng quay độc lập, có kho phần thưởng & tỉ lệ riêng
 // ------------------------------------------------------------
@@ -256,6 +279,34 @@ async function deleteEventApi(id) {
 }
 async function spinEventWheelApi(eventId) {
     return apiFetch(`/api/events/${eventId}/spin`, { method: 'POST', body: JSON.stringify({ deviceCode: getOrCreateDeviceCode() }) });
+}
+
+// Giai đoạn 2 — khóa QR: khách gửi yêu cầu tham gia (đã chuyển khoản theo QR + số tiền admin
+// đặt), yêu cầu rơi vào "pending" và chờ Admin duyệt trong trang quản trị.
+async function requestEventAccessApi(eventId, note) {
+    return apiFetch(`/api/events/${eventId}/request-access`, {
+        method: 'POST',
+        body: JSON.stringify({ deviceCode: getOrCreateDeviceCode(), note })
+    });
+}
+
+// --- Quản trị: danh sách + duyệt/từ chối yêu cầu tham gia sự kiện ---
+async function fetchEventRequestsApi() {
+    const list = await apiFetch('/api/admin/event-requests');
+    _eventRequestsCache = list;
+    return list;
+}
+async function approveEventRequestApi(id) {
+    const reqEntry = await apiFetch(`/api/admin/event-requests/${id}/approve`, { method: 'PUT' });
+    const idx = _eventRequestsCache.findIndex(r => r.id === id);
+    if (idx !== -1) _eventRequestsCache[idx] = reqEntry;
+    return reqEntry;
+}
+async function rejectEventRequestApi(id) {
+    const reqEntry = await apiFetch(`/api/admin/event-requests/${id}/reject`, { method: 'PUT' });
+    const idx = _eventRequestsCache.findIndex(r => r.id === id);
+    if (idx !== -1) _eventRequestsCache[idx] = reqEntry;
+    return reqEntry;
 }
 
 // ------------------------------------------------------------

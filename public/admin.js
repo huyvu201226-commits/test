@@ -72,6 +72,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Event delegation cho bảng Yêu Cầu Tham Gia Sự Kiện
+    const eventRequestsTbody = document.getElementById('adminEventRequestsTableBody');
+    if (eventRequestsTbody) {
+        eventRequestsTbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            if (btn.dataset.action === 'approve-event-request') approveEventRequestUI(id);
+            if (btn.dataset.action === 'reject-event-request') rejectEventRequestUI(id);
+        });
+    }
+
     const rewardsContainer = document.getElementById('eventRewardsContainer');
     if (rewardsContainer) {
         addRewardRow(); // 1 dòng phần thưởng trống sẵn để tạo sự kiện mới
@@ -116,6 +128,7 @@ async function loadAdminData() {
     loadSettingsToForm();
     renderActivityLog();
     renderEventsAdmin();
+    renderEventRequestsAdmin();
     updateAdminNavLogo();
     loadCollaborators();
 }
@@ -516,6 +529,10 @@ function loadSettingsToForm() {
     document.getElementById('settingSiteTitle').value = settings.siteTitle || 'Shop J_HUSH - Web Kết Nối Chính Thức Bởi Admin HUIDUC';
     document.getElementById('settingSiteDescription').value = settings.siteDescription || 'Shop J_HUSH - Web kết nối chính thức bởi Admin HUIDUC.';
     document.getElementById('settingSiteName').value = settings.siteName || '';
+    document.getElementById('settingPromoSpinDesc').value = settings.promoSpinDescription || '';
+    document.getElementById('settingPromoSpinRate').value = (settings.promoSpinRate != null) ? settings.promoSpinRate : 0.1;
+    document.getElementById('settingFreeSpinDesc').value = settings.freeSpinDescription || '';
+    document.getElementById('settingFreeSpinRate').value = (settings.freeSpinRate != null) ? settings.freeSpinRate : 0.1;
     document.getElementById('settingIntroText').value = settings.introText || '';
     document.getElementById('settingBankName').value = settings.bankName || '';
     document.getElementById('settingBankAcc').value = settings.bankAcc || '';
@@ -549,6 +566,10 @@ async function saveGlobalSettings(event) {
         siteTitle: document.getElementById('settingSiteTitle').value.trim(),
         siteDescription: document.getElementById('settingSiteDescription').value.trim(),
         siteName: document.getElementById('settingSiteName').value.trim(),
+        promoSpinDescription: document.getElementById('settingPromoSpinDesc').value.trim(),
+        promoSpinRate: parseFloat(document.getElementById('settingPromoSpinRate').value) || 0,
+        freeSpinDescription: document.getElementById('settingFreeSpinDesc').value.trim(),
+        freeSpinRate: parseFloat(document.getElementById('settingFreeSpinRate').value) || 0,
         introText: document.getElementById('settingIntroText').value,
         bankName: document.getElementById('settingBankName').value,
         bankAcc: document.getElementById('settingBankAcc').value,
@@ -640,7 +661,7 @@ async function handleChangePassword(event) {
 // ============================================================
 // QUẢN LÝ SỰ KIỆN (mục 6) — mỗi sự kiện là 1 vòng quay độc lập với kho phần thưởng riêng.
 // Khi tạo/bật hiển thị, sự kiện tự động xuất hiện ở trang Shop (banner) và trang
-// "Quay Là Trúng" (vòng quay riêng) — xem renderShopEventBanners()/renderEventWheels() trong script.js.
+// "Quay Là Trúng" (3 trò chơi riêng) — xem renderShopEventBanners()/renderEventGames() trong script.js.
 // ============================================================
 function renderEventsAdmin() {
     const tbody = document.getElementById('adminEventsTableBody');
@@ -653,16 +674,20 @@ function renderEventsAdmin() {
     }
 
     const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN') : '—';
+    const statusBadgeHtml = (status) => {
+        if (status === 'hien') return '<span class="badge-status badge-selling">Hiển thị</span>';
+        if (status === 'tam_khoa') return '<span class="badge-status badge-sold">Tạm khóa</span>';
+        return '<span class="badge-status badge-hacked">Đang ẩn</span>';
+    };
     const fragment = document.createDocumentFragment();
     events.forEach(ev => {
-        const statusBadge = ev.status === 'hien'
-            ? '<span class="badge-status badge-selling">Hiển thị</span>'
-            : '<span class="badge-status badge-sold">Đang ẩn</span>';
+        const qrBadge = ev.requireQr ? ' · <span style="color:var(--gold);">Khóa QR</span>' : '';
+        const playsBadge = ev.type !== 'uu_dai' ? ` · Giới hạn ${ev.maxPlays} lượt/acc` : '';
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><b>${escapeHtml(ev.name)}</b><div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(EVENT_TYPE_LABELS[ev.type] || '')} · ${ev.rewards.length} phần thưởng</div></td>
+            <td><b>${escapeHtml(ev.name)}</b><div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(EVENT_TYPE_LABELS[ev.type] || '')} · ${ev.rewards.length} phần thưởng${playsBadge}${qrBadge}</div></td>
             <td style="font-size:0.8rem;">${fmt(ev.startTime)}<br>đến ${fmt(ev.endTime)}</td>
-            <td>${statusBadge}</td>
+            <td>${statusBadgeHtml(ev.status)}</td>
             <td>
                 <button class="btn-sm btn-edit" data-id="${ev.id}" data-action="edit-event">Sửa</button>
                 <button class="btn-sm ${ev.status === 'hien' ? 'btn-lock' : 'btn-unlock'}" data-id="${ev.id}" data-action="toggle-event">${ev.status === 'hien' ? 'Ẩn' : 'Hiện'}</button>
@@ -673,6 +698,76 @@ function renderEventsAdmin() {
     });
     tbody.innerHTML = '';
     tbody.appendChild(fragment);
+}
+
+// ------------------------------------------------------------
+// Yêu Cầu Tham Gia Sự Kiện (khóa QR) — Giai đoạn 2
+// ------------------------------------------------------------
+function renderEventRequestsAdmin() {
+    const tbody = document.getElementById('adminEventRequestsTableBody');
+    const badge = document.getElementById('eventRequestsBadge');
+    if (!tbody) return;
+    const requests = getEventRequests();
+
+    const pendingCount = requests.filter(r => r.status === 'pending').length;
+    if (badge) {
+        if (pendingCount > 0) {
+            badge.style.display = 'inline-block';
+            badge.textContent = `${pendingCount} chờ duyệt`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="log-empty">Chưa có yêu cầu tham gia nào.</td></tr>';
+        return;
+    }
+
+    const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN') : '—';
+    const fragment = document.createDocumentFragment();
+    // Chờ duyệt lên trước để Admin xử lý ngay
+    const sorted = [...requests].sort((a, b) => (a.status === 'pending' ? -1 : 0) - (b.status === 'pending' ? -1 : 0) || b.createdAt - a.createdAt);
+    sorted.forEach(r => {
+        const statusInfo = EVENT_REQUEST_STATUS_LABELS[r.status] || { text: r.status, badge: 'badge-sold' };
+        const actions = r.status === 'pending'
+            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="approve-event-request">Duyệt</button>
+               <button class="btn-sm btn-delete" data-id="${r.id}" data-action="reject-event-request">Từ chối</button>`
+            : '—';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(r.eventName)}</td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.deviceCode)}</td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.note || '—')}</td>
+            <td style="font-size:0.8rem;">${fmt(r.createdAt)}</td>
+            <td><span class="badge-status ${statusInfo.badge}">${statusInfo.text}</span></td>
+            <td>${actions}</td>
+        `;
+        fragment.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+}
+
+async function approveEventRequestUI(id) {
+    try {
+        await approveEventRequestApi(id);
+        renderEventRequestsAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi duyệt yêu cầu: ' + err.message);
+    }
+}
+
+async function rejectEventRequestUI(id) {
+    if (!confirm('Từ chối yêu cầu tham gia này? Khách sẽ không được chơi sự kiện cho tới khi gửi yêu cầu mới.')) return;
+    try {
+        await rejectEventRequestApi(id);
+        renderEventRequestsAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi từ chối yêu cầu: ' + err.message);
+    }
 }
 
 function addRewardRow(reward) {
@@ -711,6 +806,13 @@ function editEvent(id) {
     document.getElementById('eventEndInput').value = ev.endTime ? ev.endTime.slice(0, 16) : '';
     document.getElementById('eventBannerInput').value = ev.banner || '';
     document.getElementById('eventDescInput').value = ev.description || '';
+    document.getElementById('eventDiscountPercentInput').value = ev.discountPercent || '';
+    document.getElementById('eventMaxPlaysInput').value = ev.maxPlays != null ? ev.maxPlays : 1;
+    document.getElementById('eventRequireQrInput').checked = !!ev.requireQr;
+    document.getElementById('eventQrAmountInput').value = ev.qrAmount || '';
+    document.getElementById('eventQrNoteInput').value = ev.qrNote || '';
+    document.getElementById('eventClosedNoticeInput').value = ev.closedNoticeText || '';
+    document.getElementById('eventRabbitSpeedInput').value = ev.rabbitSpeedMs || 800;
 
     const container = document.getElementById('eventRewardsContainer');
     container.innerHTML = '';
@@ -742,6 +844,13 @@ async function saveEvent(event) {
         endTime: document.getElementById('eventEndInput').value || null,
         banner: document.getElementById('eventBannerInput').value.trim(),
         description: document.getElementById('eventDescInput').value.trim(),
+        discountPercent: parseFloat(document.getElementById('eventDiscountPercentInput').value) || 0,
+        maxPlays: parseInt(document.getElementById('eventMaxPlaysInput').value, 10) || 1,
+        requireQr: document.getElementById('eventRequireQrInput').checked,
+        qrAmount: parseInt(document.getElementById('eventQrAmountInput').value, 10) || 0,
+        qrNote: document.getElementById('eventQrNoteInput').value.trim(),
+        closedNoticeText: document.getElementById('eventClosedNoticeInput').value.trim(),
+        rabbitSpeedMs: parseInt(document.getElementById('eventRabbitSpeedInput').value, 10) || 800,
         rewards
     };
 
