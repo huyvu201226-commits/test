@@ -43,7 +43,9 @@ if (CLOUDINARY_CONFIGURED) {
 
 const MONGO_URL = process.env.MONGO_URL;
 
-console.log(MONGO_URL);
+if (!MONGO_URL) {
+    console.warn('CẢNH BÁO: Chưa cấu hình MONGO_URL trong .env — server sẽ không kết nối được MongoDB.');
+}
 
 let mongoDB;
 let gridBucket; // Bucket GridFS — lưu ảnh/nhạc trực tiếp trong MongoDB Atlas, vĩnh viễn, không phụ thuộc đĩa Render.
@@ -74,6 +76,11 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 // được ghi lại xuống đĩa ngay lập tức (nối tiếp nhau, tránh ghi đè chéo).
 // ------------------------------------------------------------
 let db = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+// Khởi tạo mặc định ngay từ lần đọc file local (trước khi biết có Mongo hay không) —
+// đảm bảo db.eventRequests và các field mới của event luôn tồn tại kể cả khi server
+// chạy tạm thời trên dữ liệu local (Mongo chưa kết nối xong).
+ensureEventsInitialized();
+ensureEventRequestsInitialized();
 let saveQueue = Promise.resolve();
 function persist() {
 
@@ -144,6 +151,52 @@ function ensureCollaboratorsInitialized() {
 }
 
 // ------------------------------------------------------------
+// Giai đoạn 2 — tầng dùng chung cho 4 sự kiện (Giảm Deal / Vòng Quay / Đập Thỏ / Đập Hộp).
+// normalizeEvent() điền đầy đủ các field mới (khóa QR, giới hạn lượt chơi tổng, thông báo
+// tạm khóa, tốc độ thỏ, số ô hộp...) cho MỌI sự kiện — cả sự kiện cũ (tạo trước bản cập
+// nhật này) lẫn sự kiện mới tạo/sửa, để phía trước (client) luôn nhận được shape đầy đủ.
+// ------------------------------------------------------------
+function normalizeEvent(ev) {
+    return {
+        id: ev.id,
+        name: ev.name || 'Sự kiện mới',
+        type: ev.type || 'uu_dai', // uu_dai (Giảm Deal) | vong_quay | dap_tho | dap_hop
+        startTime: ev.startTime || null,
+        endTime: ev.endTime || null,
+        banner: ev.banner || '',
+        description: ev.description || '',
+        status: ev.status || 'an', // an (ẩn hẳn) | hien (hiển thị, chơi được) | tam_khoa (hiện mờ + thông báo)
+        spinPrice: Number(ev.spinPrice) || 0,
+        discountPercent: Number(ev.discountPercent) || 0, // % giảm trực tiếp — dùng cho loại "Giảm Deal"
+        rewards: Array.isArray(ev.rewards) ? ev.rewards : [],
+        // Khóa bằng QR: khi bật, khách phải gửi yêu cầu tham gia (kèm đã chuyển khoản theo QR+số
+        // tiền admin đặt) và chờ Admin duyệt trong trang quản trị mới được chơi.
+        requireQr: !!ev.requireQr,
+        qrAmount: Number(ev.qrAmount) || 0,
+        qrNote: ev.qrNote || '',
+        // Giới hạn TỔNG số lượt chơi / 1 tài khoản (thiết bị) trong suốt sự kiện — không còn
+        // reset lại mỗi ngày như cơ chế cũ.
+        maxPlays: ev.maxPlays != null && ev.maxPlays !== '' ? Number(ev.maxPlays) : 1,
+        // Thông báo hiển thị cho khách khi sự kiện đang tạm đóng / chưa tới ngày diễn ra
+        closedNoticeText: ev.closedNoticeText || 'Sự kiện hiện đang tạm đóng, vui lòng quay lại sau.',
+        // Riêng "Đập Thỏ May Mắn": tốc độ thỏ nhấp nhô (ms/lần đổi ô) + số ô (giếng)
+        rabbitSpeedMs: Number(ev.rabbitSpeedMs) || 800,
+        rabbitHoles: Number(ev.rabbitHoles) || 6,
+        // Riêng "Đập Hộp May Mắn": số hộp trong lưới
+        boxCount: Number(ev.boxCount) || 6,
+        createdAt: ev.createdAt || Date.now(),
+        updatedAt: ev.updatedAt || Date.now()
+    };
+}
+function ensureEventsInitialized() {
+    if (!Array.isArray(db.events)) db.events = [];
+    db.events = db.events.map(normalizeEvent);
+}
+function ensureEventRequestsInitialized() {
+    if (!Array.isArray(db.eventRequests)) db.eventRequests = [];
+}
+
+// ------------------------------------------------------------
 // Phiên đăng nhập (token ngẫu nhiên lưu trong bộ nhớ, hết hạn sau 12h).
 // Có 2 vai trò (role): 'admin' (toàn quyền) và 'ctv' (cộng tác viên — chỉ được
 // thao tác trên Kho Tài Khoản Bán, xem requireAccountManager bên dưới).
@@ -188,17 +241,31 @@ function actorLabel(req) {
 }
 
 // ------------------------------------------------------------
-// Sự kiện: tính "đang hoạt động" = trạng thái hiển thị + đang trong khoảng thời gian
+// Sự kiện: trạng thái hiển thị cho khách —
+//   'hidden' = không hiện gì cả (status "an", hoặc đã hết thời gian kết thúc)
+//   'locked' = hiện mờ + thông báo hướng dẫn (status "tam_khoa", hoặc chưa tới ngày bắt đầu) —
+//              áp dụng cho 3 sự kiện tương tác (vòng quay/đập thỏ/đập hộp); sự kiện Giảm Deal
+//              chỉ có 2 trạng thái hidden/active vì bản chất là bảng thông báo, không phải trò chơi.
+//   'active' = hiển thị & chơi/áp dụng được bình thường
 // ------------------------------------------------------------
-function isEventActive(ev) {
-    if (ev.status !== 'hien') return false;
+function eventDisplayState(ev) {
+    if (ev.status === 'an') return 'hidden';
     const now = Date.now();
-    if (ev.startTime && now < new Date(ev.startTime).getTime()) return false;
-    if (ev.endTime && now > new Date(ev.endTime).getTime()) return false;
-    return true;
+    if (ev.endTime && now > new Date(ev.endTime).getTime()) return 'hidden';
+    if (ev.status === 'tam_khoa') return 'locked';
+    if (ev.startTime && now < new Date(ev.startTime).getTime()) return 'locked';
+    return 'active';
+}
+// Giữ lại tên hàm cũ cho các đoạn code khác còn gọi tới (tương đương displayState === 'active')
+function isEventActive(ev) {
+    return eventDisplayState(ev) === 'active';
 }
 function publicEvent(ev) {
-    return { ...ev, rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, remaining: r.remaining })) };
+    return {
+        ...ev,
+        rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, remaining: r.remaining })),
+        displayState: eventDisplayState(ev)
+    };
 }
 
 // ------------------------------------------------------------
@@ -262,6 +329,9 @@ app.get(['/', '/index.html'], (req, res) => {
 
         const title = (db.settings && db.settings.siteTitle) || 'Shop J_HUSH';
         const description = (db.settings && db.settings.siteDescription) || 'Web kết nối chính thức bởi Admin HUIDUC.';
+        const siteName = (db.settings && db.settings.siteName) || title;
+        const promoSpinDesc = (db.settings && db.settings.promoSpinDescription) || 'Mỗi thiết bị được quay <b>1 lượt / tháng</b>, xác suất trúng phần thưởng lớn là <b>1/1000</b> (minh bạch, reset vào đầu tháng sau).';
+        const freeSpinDesc = (db.settings && db.settings.freeSpinDescription) || 'Quay miễn phí, xác suất trúng acc là <b>1/1000</b>, minh bạch tuyệt đối. Mỗi thiết bị chỉ được quay <b>1 lần / ngày</b> (reset lúc 0h). Trúng thưởng là nhận thông tin acc ngay lập tức bên dưới.';
         const logoUrl = db.settings && db.settings.logoUrl;
         const ogImage = logoUrl ? (logoUrl.startsWith('http') ? logoUrl : `${req.protocol}://${req.get('host')}${logoUrl}`) : '';
         const pageUrl = `${req.protocol}://${req.get('host')}/`;
@@ -269,8 +339,11 @@ app.get(['/', '/index.html'], (req, res) => {
         html = html
             .split('__SITE_TITLE__').join(escapeHtmlAttr(title))
             .split('__SITE_DESCRIPTION__').join(escapeHtmlAttr(description))
+            .split('__SITE_NAME__').join(escapeHtmlAttr(siteName))
             .split('__SITE_OG_IMAGE__').join(escapeHtmlAttr(ogImage))
-            .split('__SITE_URL__').join(escapeHtmlAttr(pageUrl));
+            .split('__SITE_URL__').join(escapeHtmlAttr(pageUrl))
+            .split('__PROMO_SPIN_DESC__').join(promoSpinDesc)
+            .split('__FREE_SPIN_DESC__').join(freeSpinDesc);
 
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
@@ -381,7 +454,9 @@ app.get('/api/state', (req, res) => {
         accounts: db.accounts,
         freeAccounts: db.freeAccounts,
         settings: publicSettings(db.settings),
-        events: db.events.filter(isEventActive).map(publicEvent)
+        // "hidden" = status "an" hoặc đã hết hạn -> không hiện gì. Còn "locked" (tạm khóa/chưa tới
+        // ngày) VẪN hiện ra nhưng ở dạng mờ + thông báo hướng dẫn, xử lý ở phía client theo displayState.
+        events: db.events.filter(ev => eventDisplayState(ev) !== 'hidden').map(publicEvent)
     });
 });
 
@@ -391,7 +466,21 @@ app.get('/api/device/:code/status', (req, res) => {
     const dayKey = getDayKey();
     const promoSpin = (state.promoSpin && state.promoSpin.month === monthKey) ? state.promoSpin : { month: monthKey, spun: false, won: false };
     const freeSpin = (state.freeSpin && state.freeSpin.day === dayKey) ? state.freeSpin : { day: dayKey, spun: false, won: false, prizeCode: null };
-    res.json({ discountUsed: !!state.discountUsed, promoSpin, freeSpin, events: state.events });
+
+    // Giai đoạn 2: mỗi sự kiện trả về {playsUsed, maxPlays, requestStatus} thay vì chỉ {day, spun, won}
+    // — playsUsed/maxPlays tính TỔNG số lượt trong suốt sự kiện (không reset theo ngày), requestStatus
+    // phản ánh yêu cầu tham gia (khóa QR) mới nhất: 'none' | 'pending' | 'approved' | 'rejected'.
+    const events = {};
+    (db.events || []).forEach(ev => {
+        const evState = state.events[ev.id] || { playsUsed: 0, requestStatus: 'none' };
+        events[ev.id] = {
+            playsUsed: evState.playsUsed || 0,
+            maxPlays: Number(ev.maxPlays) || 1,
+            requestStatus: evState.requestStatus || 'none'
+        };
+    });
+
+    res.json({ discountUsed: !!state.discountUsed, promoSpin, freeSpin, events });
 });
 
 app.post('/api/spin/promo', (req, res) => {
@@ -404,7 +493,8 @@ app.post('/api/spin/promo', (req, res) => {
     }
     if (state.promoSpin.spun) return res.json({ alreadySpun: true, won: state.promoSpin.won });
 
-    const won = Math.random() < WIN_PROBABILITY;
+    const promoRate = ((db.settings && db.settings.promoSpinRate) != null ? Number(db.settings.promoSpinRate) : (WIN_PROBABILITY * 100)) / 100;
+    const won = Math.random() < promoRate;
     state.promoSpin.spun = true;
     state.promoSpin.won = won;
     persist();
@@ -424,7 +514,8 @@ app.post('/api/spin/free', (req, res) => {
         return res.json({ alreadySpun: true, won: state.freeSpin.won, prize });
     }
 
-    let won = Math.random() < WIN_PROBABILITY;
+    const freeRate = ((db.settings && db.settings.freeSpinRate) != null ? Number(db.settings.freeSpinRate) : (WIN_PROBABILITY * 100)) / 100;
+    let won = Math.random() < freeRate;
     let prize = null;
     if (won) {
         const pool = db.freeAccounts.filter(a => !a.claimed);
@@ -453,22 +544,41 @@ app.post('/api/discount/use', (req, res) => {
     res.json({ ok: true });
 });
 
-// Quay vòng quay của 1 sự kiện cụ thể (mỗi sự kiện có kho phần thưởng & tỉ lệ riêng)
+// Chơi 1 lượt của sự kiện tương tác (Vòng Quay / Đập Thỏ / Đập Hộp — cả 3 dùng chung 1 tầng
+// logic: bốc phần thưởng theo trọng số odds, chỉ khác giao diện hiển thị ở phía client).
+// Giai đoạn 2: thay cơ chế "reset theo ngày" bằng khóa QR (nếu bật) + giới hạn TỔNG số lượt
+// chơi trên toàn bộ thời gian sự kiện.
 app.post('/api/events/:id/spin', (req, res) => {
     const { deviceCode } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const ev = db.events.find(e => e.id === req.params.id);
-    if (!ev || !isEventActive(ev)) return res.status(404).json({ error: 'Sự kiện không tồn tại hoặc đã kết thúc.' });
+    if (!ev) return res.status(404).json({ error: 'Sự kiện không tồn tại hoặc đã kết thúc.' });
+
+    const display = eventDisplayState(ev);
+    if (display === 'hidden') return res.status(404).json({ error: 'Sự kiện không tồn tại hoặc đã kết thúc.' });
+    if (display === 'locked') {
+        return res.status(423).json({
+            error: 'locked',
+            notice: ev.closedNoticeText || 'Sự kiện hiện đang tạm đóng, vui lòng quay lại sau.'
+        });
+    }
 
     const state = getDeviceState(deviceCode);
-    const dayKey = getDayKey();
-    const evState = state.events[ev.id] && state.events[ev.id].day === dayKey
-        ? state.events[ev.id]
-        : { day: dayKey, spun: false, won: false, prizeId: null };
+    const evState = state.events[ev.id] || { playsUsed: 0, requestStatus: 'none' };
 
-    if (evState.spun) {
-        const prize = evState.prizeId ? ev.rewards.find(r => r.id === evState.prizeId) : null;
-        return res.json({ alreadySpun: true, won: evState.won, prize: prize ? { id: prize.id, name: prize.name, image: prize.image } : null });
+    // Khóa bằng QR: bắt buộc yêu cầu tham gia được Admin duyệt trước khi được chơi
+    if (ev.requireQr && evState.requestStatus !== 'approved') {
+        return res.status(403).json({
+            error: 'access_required',
+            requestStatus: evState.requestStatus || 'none',
+            qrAmount: ev.qrAmount,
+            qrNote: ev.qrNote
+        });
+    }
+
+    const maxPlays = Number(ev.maxPlays) || 1;
+    if (evState.playsUsed >= maxPlays) {
+        return res.json({ alreadySpun: true, limitReached: true, playsUsed: evState.playsUsed, maxPlays });
     }
 
     // Bốc số ngẫu nhiên theo trọng số (odds tính theo %), chỉ tính các phần thưởng còn hàng
@@ -483,17 +593,51 @@ app.post('/api/events/:id/spin', (req, res) => {
 
     if (wonReward) wonReward.remaining -= 1;
 
-    evState.spun = true;
-    evState.won = !!wonReward;
-    evState.prizeId = wonReward ? wonReward.id : null;
+    evState.playsUsed += 1;
     state.events[ev.id] = evState;
     persist();
 
     res.json({
         alreadySpun: false,
         won: !!wonReward,
+        playsUsed: evState.playsUsed,
+        maxPlays,
         prize: wonReward ? { id: wonReward.id, name: wonReward.name, image: wonReward.image } : null
     });
+});
+
+// Khách gửi yêu cầu tham gia sự kiện đang khóa QR (đã chuyển khoản theo QR + số tiền admin
+// đặt) — yêu cầu này rơi vào trạng thái "pending" và chờ Admin duyệt trong trang quản trị.
+app.post('/api/events/:id/request-access', (req, res) => {
+    const { deviceCode, note } = req.body || {};
+    if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
+    const ev = db.events.find(e => e.id === req.params.id);
+    if (!ev) return res.status(404).json({ error: 'Sự kiện không tồn tại.' });
+    if (!ev.requireQr) return res.status(400).json({ error: 'Sự kiện này không yêu cầu duyệt truy cập.' });
+
+    const state = getDeviceState(deviceCode);
+    const evState = state.events[ev.id] || { playsUsed: 0, requestStatus: 'none' };
+
+    if (evState.requestStatus === 'pending') return res.json({ ok: true, requestStatus: 'pending' });
+    if (evState.requestStatus === 'approved') return res.json({ ok: true, requestStatus: 'approved' });
+
+    ensureEventRequestsInitialized();
+    const reqEntry = {
+        id: 'evreq_' + Date.now(),
+        eventId: ev.id,
+        eventName: ev.name,
+        deviceCode,
+        note: note ? String(note).slice(0, 300) : '',
+        status: 'pending',
+        createdAt: Date.now(),
+        resolvedAt: null
+    };
+    db.eventRequests.unshift(reqEntry);
+    evState.requestStatus = 'pending';
+    state.events[ev.id] = evState;
+    addActivityLog('Yêu cầu tham gia sự kiện', `Thiết bị ${deviceCode} yêu cầu tham gia sự kiện "${ev.name}".`);
+    persist();
+    res.json({ ok: true, requestStatus: 'pending' });
 });
 
 // ===================== ĐĂNG NHẬP ADMIN =====================
@@ -529,11 +673,13 @@ app.post('/api/admin/change-password', requireAdmin, (req, res) => {
 // ===================== KHU VỰC ADMIN (yêu cầu đăng nhập) =====================
 
 app.get('/api/admin/state', requireAdmin, (req, res) => {
+    ensureEventRequestsInitialized();
     res.json({
         accounts: db.accounts,
         freeAccounts: db.freeAccounts,
         settings: publicSettings(db.settings),
         events: db.events,
+        eventRequests: db.eventRequests,
         activityLog: db.activityLog
     });
 });
@@ -763,27 +909,21 @@ app.delete('/api/activity-log', requireAdmin, (req, res) => {
 
 // --- Sự kiện (mục 6): mỗi sự kiện là 1 vòng quay độc lập với kho phần thưởng riêng ---
 app.post('/api/events', requireAdmin, (req, res) => {
-    const ev = {
+    const rewards = (req.body.rewards || []).map((r, i) => ({
+        id: 'rw_' + Date.now() + '_' + i,
+        name: r.name,
+        image: r.image || '',
+        odds: Number(r.odds) || 0,
+        quantity: Number(r.quantity) || 0,
+        remaining: Number(r.quantity) || 0
+    }));
+    const ev = normalizeEvent({
+        ...req.body,
         id: 'ev_' + Date.now(),
-        name: req.body.name || 'Sự kiện mới',
-        type: req.body.type || 'uu_dai',
-        startTime: req.body.startTime || null,
-        endTime: req.body.endTime || null,
-        banner: req.body.banner || '',
-        description: req.body.description || '',
-        status: req.body.status || 'an',
-        spinPrice: Number(req.body.spinPrice) || 0,
-        rewards: (req.body.rewards || []).map((r, i) => ({
-            id: 'rw_' + Date.now() + '_' + i,
-            name: r.name,
-            image: r.image || '',
-            odds: Number(r.odds) || 0,
-            quantity: Number(r.quantity) || 0,
-            remaining: Number(r.quantity) || 0
-        })),
+        rewards,
         createdAt: Date.now(),
         updatedAt: Date.now()
-    };
+    });
     db.events.unshift(ev);
     addActivityLog('Tạo sự kiện mới', `Đã tạo sự kiện "${ev.name}".`);
     persist();
@@ -791,23 +931,16 @@ app.post('/api/events', requireAdmin, (req, res) => {
 });
 
 app.put('/api/events/:id', requireAdmin, (req, res) => {
-    const ev = db.events.find(e => e.id === req.params.id);
-    if (!ev) return res.status(404).json({ error: 'Không tìm thấy sự kiện.' });
+    const idx = db.events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy sự kiện.' });
+    const ev = db.events[idx];
 
-    ev.name = req.body.name ?? ev.name;
-    ev.type = req.body.type ?? ev.type;
-    ev.startTime = req.body.startTime ?? ev.startTime;
-    ev.endTime = req.body.endTime ?? ev.endTime;
-    ev.banner = req.body.banner ?? ev.banner;
-    ev.description = req.body.description ?? ev.description;
-    ev.status = req.body.status ?? ev.status;
-    ev.spinPrice = req.body.spinPrice != null ? Number(req.body.spinPrice) : ev.spinPrice;
-
+    let rewards = ev.rewards;
     if (Array.isArray(req.body.rewards)) {
         // Giữ lại "remaining" của phần thưởng cũ (theo id) nếu vẫn còn trong danh sách mới,
         // để không cấp lại số lượng đã phát khi admin chỉ sửa nhẹ; phần thưởng mới thêm thì khởi tạo remaining = quantity.
         const oldById = new Map(ev.rewards.map(r => [r.id, r]));
-        ev.rewards = req.body.rewards.map((r, i) => {
+        rewards = req.body.rewards.map((r, i) => {
             const old = r.id && oldById.get(r.id);
             const quantity = Number(r.quantity) || 0;
             return {
@@ -820,10 +953,19 @@ app.put('/api/events/:id', requireAdmin, (req, res) => {
             };
         });
     }
-    ev.updatedAt = Date.now();
-    addActivityLog('Cập nhật sự kiện', `Đã cập nhật sự kiện "${ev.name}".`);
+
+    const merged = normalizeEvent({
+        ...ev,
+        ...req.body,
+        rewards,
+        id: ev.id,
+        createdAt: ev.createdAt,
+        updatedAt: Date.now()
+    });
+    db.events[idx] = merged;
+    addActivityLog('Cập nhật sự kiện', `Đã cập nhật sự kiện "${merged.name}".`);
     persist();
-    res.json(ev);
+    res.json(merged);
 });
 
 app.put('/api/events/:id/toggle', requireAdmin, (req, res) => {
@@ -842,6 +984,44 @@ app.delete('/api/events/:id', requireAdmin, (req, res) => {
     addActivityLog('Xóa sự kiện', `Đã xóa sự kiện "${removed.name}".`);
     persist();
     res.json({ ok: true });
+});
+
+// --- Yêu cầu tham gia sự kiện (khóa QR) — Admin xem & duyệt/từ chối ---
+app.get('/api/admin/event-requests', requireAdmin, (req, res) => {
+    ensureEventRequestsInitialized();
+    res.json(db.eventRequests);
+});
+
+app.put('/api/admin/event-requests/:id/approve', requireAdmin, (req, res) => {
+    ensureEventRequestsInitialized();
+    const reqEntry = db.eventRequests.find(r => r.id === req.params.id);
+    if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
+
+    reqEntry.status = 'approved';
+    reqEntry.resolvedAt = Date.now();
+    const state = getDeviceState(reqEntry.deviceCode);
+    const evState = state.events[reqEntry.eventId] || { playsUsed: 0, requestStatus: 'none' };
+    evState.requestStatus = 'approved';
+    state.events[reqEntry.eventId] = evState;
+    addActivityLog('Duyệt yêu cầu tham gia sự kiện', `Đã duyệt thiết bị ${reqEntry.deviceCode} tham gia sự kiện "${reqEntry.eventName}".`);
+    persist();
+    res.json(reqEntry);
+});
+
+app.put('/api/admin/event-requests/:id/reject', requireAdmin, (req, res) => {
+    ensureEventRequestsInitialized();
+    const reqEntry = db.eventRequests.find(r => r.id === req.params.id);
+    if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
+
+    reqEntry.status = 'rejected';
+    reqEntry.resolvedAt = Date.now();
+    const state = getDeviceState(reqEntry.deviceCode);
+    const evState = state.events[reqEntry.eventId] || { playsUsed: 0, requestStatus: 'none' };
+    evState.requestStatus = 'rejected';
+    state.events[reqEntry.eventId] = evState;
+    addActivityLog('Từ chối yêu cầu tham gia sự kiện', `Đã từ chối thiết bị ${reqEntry.deviceCode} tham gia sự kiện "${reqEntry.eventName}".`);
+    persist();
+    res.json(reqEntry);
 });
 
 connectMongo().then(async ()=>{
@@ -871,6 +1051,10 @@ connectMongo().then(async ()=>{
 
     ensureAdminPasswordInitialized();
     ensureCollaboratorsInitialized();
+    // Dù db đến từ MongoDB (đã tồn tại) hay vừa được tạo mới, luôn đảm bảo mỗi event có
+    // đầy đủ field mới của Giai đoạn 2 và db.eventRequests tồn tại.
+    ensureEventsInitialized();
+    ensureEventRequestsInitialized();
     persist();
 
 

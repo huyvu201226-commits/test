@@ -1,6 +1,18 @@
 {
   "accounts": [
     {
+      "id": 1785054342125,
+      "code": "02",
+      "name": "billow",
+      "info": "",
+      "description": "",
+      "price": 550000,
+      "category": "cheap",
+      "type": "vip",
+      "status": "selling",
+      "img": "/files/6a65c4850a282220f330eea9"
+    },
+    {
       "id": 1785048638674,
       "code": "01",
       "name": "qlen",
@@ -15,54 +27,14 @@
   ],
   "activityLog": [
     {
-      "time": 1785053444444,
-      "action": "Xóa tài khoản CTV",
-      "detail": "Admin đã xóa tài khoản cộng tác viên \"ctv01\"."
+      "time": 1785104827262,
+      "action": "Đổi mật khẩu quản trị",
+      "detail": "Mật khẩu đăng nhập trang quản trị đã được thay đổi."
     },
     {
-      "time": 1785053309220,
-      "action": "Tạo tài khoản CTV",
-      "detail": "Admin đã tạo tài khoản cộng tác viên \"ctv01\"."
-    },
-    {
-      "time": 1785050623398,
-      "action": "Cập nhật tài khoản",
-      "detail": "Đã cập nhật acc 01 (qlen)."
-    },
-    {
-      "time": 1785048771236,
-      "action": "Cập nhật tài khoản",
-      "detail": "Đã cập nhật acc 01 (qlen)."
-    },
-    {
-      "time": 1785048638674,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc 01 (qlen)."
-    },
-    {
-      "time": 1785048518412,
-      "action": "Xóa tài khoản",
-      "detail": "Đã xóa acc 01 (qlen)."
-    },
-    {
-      "time": 1785048417337,
-      "action": "Cập nhật cấu hình hệ thống",
-      "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
-    },
-    {
-      "time": 1785048385728,
-      "action": "Cập nhật cấu hình hệ thống",
-      "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
-    },
-    {
-      "time": 1785010179203,
-      "action": "Cập nhật cấu hình hệ thống",
-      "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
-    },
-    {
-      "time": 1785009763531,
-      "action": "Cập nhật cấu hình hệ thống",
-      "detail": "Đã cập nhật thông tin chung / logo / avatar / nhạc nền / liên kết mạng xã hội."
+      "time": 1785102043980,
+      "action": "Đổi mật khẩu quản trị",
+      "detail": "Mật khẩu đăng nhập trang quản trị đã được thay đổi."
     }
   ],
   "deviceState": {
@@ -89,7 +61,12 @@
         "spun": true,
         "won": false
       },
-      "freeSpin": null,
+      "freeSpin": {
+        "day": "2026-07-26",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     },
     "JH-DISC-18W1VA": {
@@ -107,40 +84,76 @@
       },
       "freeSpin": null,
       "events": {}
+    },
+    "JH-DISC-J5V9Y0": {
+      "discountUsed": true,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
+      "freeSpin": {
+        "day": "2026-07-26",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
+      "events": {}
+    },
+    "JH-DISC-Z5M8TK": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-N0BHAC": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-WM1KPR": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-MI2NM1": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-8RESAA": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-SCKUAZ": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-WYFXPP": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
     }
   },
   "events": [],
-  "freeAccounts": [
-    {
-      "id": 1001,
-      "code": "FREE-01",
-      "name": "Acc Reg FreeFire Cơ Bản",
-      "info": "Rank Bạch Kim, vài skin cơ bản",
-      "description": "Acc reg tự nhiên, chưa gắn thông tin cá nhân nào, phù hợp làm acc phụ.",
-      "img": "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=300",
-      "claimed": false,
-      "claimedAt": null
-    },
-    {
-      "id": 1002,
-      "code": "FREE-02",
-      "name": "Acc Reg Liên Quân Cơ Bản",
-      "info": "10 tướng, Rank Vàng",
-      "description": "Acc reg mới tạo, đủ điều kiện chơi xếp hạng ngay.",
-      "img": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=300",
-      "claimed": false,
-      "claimedAt": null
-    }
-  ],
+  "freeAccounts": [],
   "settings": {
     "adminTitle": "J-HUSH / HUY ĐỨC",
     "introText": "🚀 Chào mừng bạn đến với shop!<br><br>Shop chuyên buôn acc từ các <b>AD uy tín</b>, hỗ trợ nguồn hàng ổn định cùng <b>hệ thống CTV hoạt động trên 50+ group</b>, giúp việc tìm kiếm và giao dịch diễn ra nhanh chóng.<br><br>✨ <b>Dịch vụ nổi bật</b><br>• Nhận tìm và buôn acc theo yêu cầu.<br>• Có <b>check uy tín, cân trung gian</b> khi cần để giao dịch an tâm.<br>• Hỗ trợ <b>góp - tìm - lên đời acc - thuê acc lâu dài</b> với chi phí hợp lý.<br>• Nhận các dịch vụ liên quan đến <b>Liên Quân và Free Fire</b>.<br><br>💬 <b>Điều shop đặt lên hàng đầu</b><br>Không chỉ bán acc, shop hướng đến <b>đồng hành lâu dài</b>. Mọi tin nhắn đều được hỗ trợ nhanh nhất có thể, tư vấn đúng nhu cầu, giải đáp tận tình trước và sau giao dịch. <b>Uy tín được xây dựng từ từng đơn hàng</b> chứ không phải lời quảng cáo.<br><br>🤝 Nếu cần tìm bất kỳ acc hay dịch vụ nào, cứ nhắn tin. Shop sẽ cố gắng tìm đúng yêu cầu và đưa ra lựa chọn phù hợp nhất.<br><br>❤️ Cảm ơn mọi người đã tin tưởng và ủng hộ. Đừng quên theo dõi shop trên các nền tảng khác để cập nhật ưu đãi, nguồn acc mới và các kèo hấp dẫn mỗi ngày!<br><br><b>Lưu ý: Hãy luôn là người giao dịch thông minh</b>, kiểm tra đầy đủ thông tin trước khi chốt bất kỳ giao dịch nào.",
     "bankName": "BIDV",
     "bankAcc": "8853340606",
     "bankOwner": "VU HUY DUC",
-    "audioUrl": "/files/6a65ad404442ec4a6996259b",
-    "logoUrl": "/files/6a65ad3f4442ec4a69962597",
-    "avatarUrl": "/files/6a65ad404442ec4a69962599",
+    "audioUrl": "/files/6a6667352d4aab962f5e00ce",
+    "logoUrl": "/files/6a6667352d4aab962f5e00ca",
+    "avatarUrl": "/files/6a6667352d4aab962f5e00cc",
     "qrImageUrl": "/files/6a65ad614442ec4a699625b5",
     "socialLinks": {
       "tiktok": "https://www.tiktok.com/@j.hush06?_t=ZS-8wYxFErGfCi&_r=1",
@@ -148,8 +161,9 @@
       "zalo": "https://zalo.me/0362062410",
       "facebook": ""
     },
-    "adminPasswordHash": "ab4dd9c34e1ebf76cdf687cdd8a3b5aa1d5f927e51497b6971a42cd26904a568",
-    "adminPasswordSalt": "cf6e107b09c5facad9d28f452565d11a"
+    "adminPasswordHash": "ed7ccb2ea51e5b1b97f9c34db98aea5fee841b117e6d6935a18fdce367e88dae",
+    "adminPasswordSalt": "dcd72d610e16ebe3c9f4b63c4448717c"
   },
-  "collaborators": []
+  "collaborators": [],
+  "eventRequests": []
 }
