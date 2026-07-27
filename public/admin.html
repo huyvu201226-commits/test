@@ -376,8 +376,21 @@
                         <label style="font-size: 0.85rem; color: var(--text-muted);">Tốc Độ Thỏ Nhấp Nhô (ms/lần đổi ô)</label>
                         <input type="number" id="eventRabbitSpeedInput" class="form-control" min="100" step="50" placeholder="VD: 800">
                     </div>
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Số Ô / Giếng</label>
+                        <input type="number" id="eventRabbitHolesInput" class="form-control" min="2" max="20" step="1" placeholder="VD: 6">
+                    </div>
                 </div>
-                <p class="field-hint">Số càng nhỏ thỏ càng nhấp nhô nhanh, càng khó đập trúng. Có 6 ô cố định như 1 chiếc giếng.</p>
+                <p class="field-hint">Tốc độ càng nhỏ thỏ càng nhấp nhô nhanh, càng khó đập trúng.</p>
+
+                <div class="subsection-title">Riêng "Đập Hộp May Mắn"</div>
+                <div class="form-grid-2">
+                    <div>
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">Số Hộp Trong Lưới</label>
+                        <input type="number" id="eventBoxCountInput" class="form-control" min="2" max="30" step="1" placeholder="VD: 6">
+                    </div>
+                </div>
+                <p class="field-hint">Số hộp quà hiển thị trong lưới cho khách chọn đập.</p>
 
                 <div class="subsection-title">Kho Phần Thưởng (Thêm/Sửa/Xóa, chỉnh tỉ lệ trúng & số lượng)</div>
                 <p class="field-hint">Tỉ lệ (%) của tất cả phần thưởng cộng lại nên ≤ 100 — phần còn lại là "Chúc may mắn lần sau". Hết số lượng thì phần thưởng đó tự động ngừng được trao dù trúng số. Phần quà có thể là ảnh hoặc chỉ là văn bản (để trống ảnh).</p>

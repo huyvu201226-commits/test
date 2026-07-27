@@ -813,6 +813,8 @@ function editEvent(id) {
     document.getElementById('eventQrNoteInput').value = ev.qrNote || '';
     document.getElementById('eventClosedNoticeInput').value = ev.closedNoticeText || '';
     document.getElementById('eventRabbitSpeedInput').value = ev.rabbitSpeedMs || 800;
+    document.getElementById('eventRabbitHolesInput').value = ev.rabbitHoles || 6;
+    document.getElementById('eventBoxCountInput').value = ev.boxCount || 6;
 
     const container = document.getElementById('eventRewardsContainer');
     container.innerHTML = '';
@@ -851,6 +853,8 @@ async function saveEvent(event) {
         qrNote: document.getElementById('eventQrNoteInput').value.trim(),
         closedNoticeText: document.getElementById('eventClosedNoticeInput').value.trim(),
         rabbitSpeedMs: parseInt(document.getElementById('eventRabbitSpeedInput').value, 10) || 800,
+        rabbitHoles: parseInt(document.getElementById('eventRabbitHolesInput').value, 10) || 6,
+        boxCount: parseInt(document.getElementById('eventBoxCountInput').value, 10) || 6,
         rewards
     };
 

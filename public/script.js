@@ -412,11 +412,32 @@ async function spinFreeWheel() {
 // Cả 3 loại tương tác đều dùng chung: giới hạn tổng lượt chơi (maxPlays/playsUsed) và khóa QR
 // (requireQr) — khách phải thanh toán rồi gửi yêu cầu, chờ Admin duyệt mới được chơi.
 // ============================================================
+// Markup dùng chung cho 1 banner "Giảm Deal" — tái sử dụng ở cả tab Shop và tab Ưu Đãi.
+function dealBannerHtml(ev) {
+    return `
+    <div class="hover-card" style="padding:16px; display:flex; align-items:center; gap:14px; margin-bottom:14px; border-color:var(--gold);">
+        ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" loading="lazy" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-fire icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
+        <div>
+            <div style="font-weight:800;">${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin:0 0 0 6px; padding:2px 10px; font-size:0.7rem; cursor:default;">Giảm ${Number(ev.discountPercent) || 0}%</span></div>
+            <div style="font-size:0.85rem; color: var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Giá sẽ tự động được gạch giảm khi đặt mua trong thời gian sự kiện.')}</div>
+        </div>
+    </div>`;
+}
+
+// Bảng thông báo Giảm Deal ở tab "Ưu Đãi" — cùng nội dung với banner ở tab Shop, để khách
+// vào đúng tab "Ưu Đãi" (tên gợi ý sẵn ưu đãi) cũng thấy ngay, không phải mò sang tab Shop mới biết.
+function renderPromoDealBanner() {
+    const container = document.getElementById('promoDealBanner');
+    if (!container) return;
+    const deals = getEvents().filter(ev => ev.type === 'uu_dai' && ev.displayState === 'active');
+    container.innerHTML = deals.map(dealBannerHtml).join('');
+}
+
 function renderShopEventBanners() {
     const container = document.getElementById('shopEventsBanner');
     if (!container) return;
     const events = getEvents();
-    if (events.length === 0) { container.innerHTML = ''; return; }
+    if (events.length === 0) { container.innerHTML = ''; renderPromoDealBanner(); return; }
 
     container.innerHTML = events.map(ev => {
         if (ev.displayState !== 'active' && ev.displayState !== 'locked') return '';
@@ -424,14 +445,7 @@ function renderShopEventBanners() {
         // Sự kiện Giảm Deal: chỉ hiện bảng thông báo, KHÔNG dẫn sang trò chơi.
         if (ev.type === 'uu_dai') {
             if (ev.displayState !== 'active') return ''; // Giảm Deal không có trạng thái "tạm khóa hiện mờ"
-            return `
-            <div class="hover-card" style="padding:16px; display:flex; align-items:center; gap:14px; margin-bottom:14px; border-color:var(--gold);">
-                ${ev.banner ? `<img src="${escapeHtml(resolveMediaSrc(ev.banner, DEFAULT_LOGO))}" alt="${escapeHtml(ev.name)}" loading="lazy" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-fire icon-flame-anim" style="font-size:2rem;color:var(--gold);flex-shrink:0;"></i>`}
-                <div>
-                    <div style="font-weight:800;">${escapeHtml(ev.name)} <span class="promo-5-badge" style="margin:0 0 0 6px; padding:2px 10px; font-size:0.7rem; cursor:default;">Giảm ${Number(ev.discountPercent) || 0}%</span></div>
-                    <div style="font-size:0.85rem; color: var(--text-muted); margin-top:4px;">${escapeHtml(ev.description || 'Giá sẽ tự động được gạch giảm khi đặt mua trong thời gian sự kiện.')}</div>
-                </div>
-            </div>`;
+            return dealBannerHtml(ev);
         }
 
         // 3 sự kiện tương tác: banner dẫn sang tab "Quay Là Trúng" để chơi.
@@ -445,6 +459,7 @@ function renderShopEventBanners() {
             </div>
         </div>`;
     }).join('');
+    renderPromoDealBanner();
 }
 
 // eventId -> true trong lúc đang chờ máy chủ trả kết quả (chặn bấm đúp / đập đúp)
