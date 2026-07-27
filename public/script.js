@@ -24,10 +24,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         clientDataReadyPromise = initClientData();
         await clientDataReadyPromise;
-        _deviceStatus = await getDeviceStatus();
     } catch (err) {
         console.error('Không thể tải dữ liệu từ máy chủ:', err);
         if (grid) grid.innerHTML = '<p style="color: var(--text-muted); text-align: center; grid-column: 1/-1;">Không thể kết nối máy chủ. Vui lòng thử tải lại trang sau ít phút.</p>';
+    }
+    // Tách riêng khỏi try/catch phía trên: nếu initClientData() lỗi nhưng lấy trạng thái thiết bị
+    // vẫn thành công (hoặc ngược lại), KHÔNG được để _deviceStatus rơi về mặc định "chưa quay" —
+    // đó chính là nguyên nhân khiến vòng quay tưởng như quay lại được sau khi tải lại trang.
+    try {
+        _deviceStatus = await getDeviceStatus();
+    } catch (err) {
+        console.error('Không thể tải trạng thái thiết bị (lượt quay/ưu đãi):', err);
     }
 
     loadSettingsToClient();
@@ -317,6 +324,12 @@ async function spinWheel() {
         setTimeout(() => {
             isSpinning = false;
             _deviceStatus.promoSpin = { ..._deviceStatus.promoSpin, spun: true, won: result.won };
+            // Server báo alreadySpun = trình duyệt bị lệch trạng thái (VD do tải trang lỗi) chứ
+            // KHÔNG phải một lượt quay mới — không được hiện lại như thể vừa quay lần đầu.
+            if (result.alreadySpun) {
+                renderPromoWheelStatus();
+                return;
+            }
             if (result.won) {
                 alert("🎉 Chúc mừng! Bạn đã may mắn trúng phần thưởng lớn từ Shop J-Hush! Hãy liên hệ Zalo Admin để nhận thưởng.");
             } else {
@@ -388,6 +401,12 @@ async function spinFreeWheel() {
         setTimeout(() => {
             isFreeSpinning = false;
             _deviceStatus.freeSpin = { ..._deviceStatus.freeSpin, spun: true, won: result.won, prizeCode: result.prize ? result.prize.code : null };
+            // Tương tự vòng quay khuyến mãi — alreadySpun nghĩa là đây chỉ là kết quả CŨ được trả
+            // lại do trạng thái trình duyệt bị lệch, không phải một lượt quay mới thật sự.
+            if (result.alreadySpun) {
+                renderFreeSpinStatus();
+                return;
+            }
             if (result.won && result.prize) {
                 alert(`🎉 Chúc mừng! Bạn đã quay trúng acc [${result.prize.code}] miễn phí! Thông tin acc đã hiển thị bên dưới.`);
                 showFreeAccPrize(result.prize);
@@ -596,11 +615,60 @@ function applyEventPlayResult(eventId, result, statusEl) {
     if (result.limitReached) {
         if (statusEl) statusEl.textContent = 'Bạn đã dùng hết lượt chơi của sự kiện này.';
     } else if (result.won && result.prize) {
-        alert(`🎉 Chúc mừng! Bạn đã trúng "${result.prize.name}" từ sự kiện! Liên hệ Zalo Admin để nhận thưởng.`);
+        openEventPrizeModal(result.prize);
     } else {
         alert('Chúc bạn may mắn lần sau!');
     }
     renderEventGames();
+}
+
+// Hộp thoại hiện phần thưởng vừa trúng — nếu là quà acc free (có account/password) thì hiện
+// luôn tài khoản/mật khẩu kèm nút sao chép, còn không thì chỉ hiện tên + ảnh/mô tả và nhắc
+// khách liên hệ Zalo Admin để nhận thưởng.
+function openEventPrizeModal(prize) {
+    const modal = document.getElementById('eventPrizeModal');
+    if (!modal) {
+        // Phòng khi index.html chưa có modal (tương thích ngược) — vẫn báo bằng alert như cũ.
+        alert(`🎉 Chúc mừng! Bạn đã trúng "${prize.name}" từ sự kiện! Liên hệ Zalo Admin để nhận thưởng.`);
+        return;
+    }
+
+    document.getElementById('eventPrizeName').textContent = prize.name || 'Phần thưởng';
+
+    const imgEl = document.getElementById('eventPrizeImg');
+    const descEl = document.getElementById('eventPrizeDesc');
+    if (prize.image) {
+        imgEl.src = resolveMediaSrc(prize.image, '');
+        imgEl.style.display = '';
+    } else {
+        imgEl.style.display = 'none';
+    }
+    descEl.textContent = prize.imageDesc || '';
+    descEl.style.display = prize.imageDesc ? '' : 'none';
+
+    const accBox = document.getElementById('eventPrizeAccBox');
+    if (prize.account) {
+        accBox.style.display = '';
+        document.getElementById('eventPrizeAccount').textContent = prize.account;
+        document.getElementById('eventPrizePassword').textContent = prize.password || '';
+    } else {
+        accBox.style.display = 'none';
+    }
+
+    document.getElementById('eventPrizeContactNote').style.display = prize.account ? 'none' : '';
+
+    modal.classList.add('active');
+}
+
+function closeEventPrizeModal() {
+    document.getElementById('eventPrizeModal').classList.remove('active');
+}
+
+function copyEventPrizeCreds() {
+    const acc = document.getElementById('eventPrizeAccount').textContent;
+    const pass = document.getElementById('eventPrizePassword').textContent;
+    navigator.clipboard.writeText(`Tài khoản: ${acc}\nMật khẩu: ${pass}`);
+    alert('Đã sao chép tài khoản/mật khẩu!');
 }
 
 // --- Vòng Quay May Mắn ---
@@ -762,6 +830,25 @@ async function submitEventAccessRequest() {
     }
 }
 
+// Tính ưu đãi tốt nhất hiện có cho 1 acc — dùng chung cho cả lưới Shop (badge góc trái ảnh +
+// giá gạch ngang) và modal thanh toán, để 2 nơi luôn hiển thị đúng và khớp nhau.
+// Ưu tiên: mã giảm 5%/thiết bị (không áp cho Acc Reg, dùng 1 lần) HOẶC % của sự kiện "Giảm Deal"
+// đang hoạt động (áp cho mọi loại acc) — lấy % nào cao hơn.
+function getAccountDiscountInfo(acc) {
+    const deviceEligible = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
+    const devicePercent = deviceEligible ? 5 : 0;
+    const dealEvent = getBestActiveDealEvent();
+    const dealPercent = dealEvent ? Number(dealEvent.discountPercent) || 0 : 0;
+
+    if (dealPercent >= devicePercent && dealPercent > 0) {
+        return { source: 'deal', percent: dealPercent, dealEvent };
+    }
+    if (devicePercent > 0) {
+        return { source: 'device', percent: devicePercent, dealEvent: null };
+    }
+    return { source: null, percent: 0, dealEvent: null };
+}
+
 // Hiển thị danh sách tài khoản (dùng DocumentFragment để giảm số lần reflow)
 function renderAccounts(accountsToRender) {
     const grid = document.getElementById('accountGrid');
@@ -778,6 +865,16 @@ function renderAccounts(accountsToRender) {
     accountsToRender.forEach((acc) => {
         const statusInfo = CLIENT_STATUS_LABELS[acc.status] || CLIENT_STATUS_LABELS.selling;
         const typeInfo = ACCOUNT_TYPE_LABELS[acc.type] || ACCOUNT_TYPE_LABELS.reg;
+        const discountInfo = getAccountDiscountInfo(acc);
+        const hasDiscount = discountInfo.percent > 0;
+        const finalPrice = hasDiscount ? Math.round(acc.price * (1 - discountInfo.percent / 100)) : acc.price;
+
+        const priceHtml = hasDiscount
+            ? `<div class="acc-price">
+                   <span class="acc-price-old">${formatVND(acc.price)}</span>
+                   <span class="acc-price-new">${formatVND(finalPrice)}</span>
+               </div>`
+            : `<div class="acc-price">${formatVND(acc.price)}</div>`;
 
         const card = document.createElement('div');
         card.className = 'acc-card hover-card';
@@ -785,6 +882,7 @@ function renderAccounts(accountsToRender) {
             <div class="acc-img-wrap">
                 <img src="${escapeHtml(resolveMediaSrc(acc.img, fallbackImg))}" alt="Ảnh acc ${escapeHtml(acc.code)}" loading="lazy">
                 ${statusInfo.badge}
+                ${hasDiscount ? `<span class="acc-discount-badge">-${discountInfo.percent}%</span>` : ''}
             </div>
             <div class="acc-body">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -793,7 +891,7 @@ function renderAccounts(accountsToRender) {
                 </div>
                 <h4 class="acc-title">${escapeHtml(acc.name)}</h4>
                 ${acc.info ? `<div style="font-size:0.8rem; color: var(--text-muted);">${escapeHtml(acc.info)}</div>` : ''}
-                <div class="acc-price">${formatVND(acc.price)}</div>
+                ${priceHtml}
                 <button class="btn-action-acc" ${statusInfo.disabled ? 'disabled' : ''} data-code="${escapeHtml(acc.code)}">
                     ${statusInfo.btnText}
                 </button>
@@ -925,21 +1023,10 @@ function openBuyModal(code) {
 
     currentBuyingCode = acc.code;
 
-    const deviceEligible = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
-    const devicePercent = deviceEligible ? 5 : 0;
-    const dealEvent = getBestActiveDealEvent();
-    const dealPercent = dealEvent ? Number(dealEvent.discountPercent) || 0 : 0;
-
-    if (dealPercent >= devicePercent && dealPercent > 0) {
-        currentDiscountSource = 'deal';
-        currentDiscountPercent = dealPercent;
-    } else if (devicePercent > 0) {
-        currentDiscountSource = 'device';
-        currentDiscountPercent = devicePercent;
-    } else {
-        currentDiscountSource = null;
-        currentDiscountPercent = 0;
-    }
+    const discountInfo = getAccountDiscountInfo(acc);
+    const dealEvent = discountInfo.dealEvent;
+    currentDiscountSource = discountInfo.source;
+    currentDiscountPercent = discountInfo.percent;
     currentDiscountApplied = currentDiscountSource !== null;
     const finalPrice = currentDiscountApplied ? Math.round(acc.price * (1 - currentDiscountPercent / 100)) : acc.price;
     currentBuyingPrice = finalPrice;
@@ -993,6 +1080,7 @@ async function confirmPaymentZalo() {
             await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
             _deviceStatus.discountUsed = true;
             checkDeviceDiscountCode();
+            applyAllFilters();             // cập nhật lại badge giảm giá + giá gạch ngang trên lưới Shop
         } catch (err) {
             console.error('Không thể ghi nhận sử dụng mã giảm giá:', err);
         }

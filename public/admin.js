@@ -117,6 +117,7 @@ async function verifyAdminPassword() {
 }
 
 async function logoutAdmin() {
+    if (_eventRequestsPollTimer) { clearInterval(_eventRequestsPollTimer); _eventRequestsPollTimer = null; }
     await adminLogout();
     location.reload();
 }
@@ -131,6 +132,27 @@ async function loadAdminData() {
     renderEventRequestsAdmin();
     updateAdminNavLogo();
     loadCollaborators();
+    startEventRequestsPolling();
+}
+
+// Trước đây danh sách "Yêu Cầu Tham Gia Sự Kiện" chỉ được nạp DUY NHẤT 1 LẦN lúc Admin đăng
+// nhập (qua initAdminData) — nếu khách gửi yêu cầu tham gia MỚI trong lúc Admin đang mở sẵn
+// trang, yêu cầu đó không tự xuất hiện, Admin phải tự tải lại (F5) cả trang mới thấy, tức là
+// coi như bị "không lưu vào admin". fetchEventRequestsApi() vốn đã có sẵn nhưng chưa từng được
+// gọi ở đâu — giờ gọi định kỳ để bảng luôn cập nhật gần như tức thời.
+let _eventRequestsPollTimer = null;
+function startEventRequestsPolling() {
+    if (_eventRequestsPollTimer) return; // tránh tạo nhiều interval chồng nhau nếu loadAdminData chạy lại
+    _eventRequestsPollTimer = setInterval(async () => {
+        if (!isAdminLoggedIn()) return;
+        try {
+            await fetchEventRequestsApi();
+            renderEventRequestsAdmin();
+        } catch (err) {
+            // Bỏ qua lỗi mạng tạm thời của 1 lần polling, sẽ tự thử lại ở lần kế tiếp
+            console.error('Không thể làm mới yêu cầu tham gia sự kiện:', err);
+        }
+    }, 15000); // 15 giây/lần — đủ nhanh để Admin duyệt kịp cho khách mà không gọi API quá dày
 }
 
 // ============================================================
@@ -776,13 +798,30 @@ function addRewardRow(reward) {
     const row = document.createElement('div');
     row.className = 'reward-row';
     row.dataset.rewardId = reward && reward.id ? reward.id : '';
-    row.style.cssText = 'display:grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;';
+    row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px; margin-bottom:12px;';
     row.innerHTML = `
-        <input type="text" class="form-control reward-name" style="margin-bottom:0;" placeholder="Tên phần thưởng" value="${reward ? escapeHtml(reward.name) : ''}">
-        <input type="url" class="form-control reward-image" style="margin-bottom:0;" placeholder="Link ảnh phần thưởng" value="${reward ? escapeHtml(reward.image || '') : ''}">
-        <input type="number" class="form-control reward-odds" style="margin-bottom:0;" placeholder="Tỉ lệ %" step="0.01" min="0" max="100" value="${reward ? reward.odds : ''}">
-        <input type="number" class="form-control reward-qty" style="margin-bottom:0;" placeholder="Số lượng" min="0" value="${reward ? reward.quantity : ''}">
-        <button type="button" class="btn-sm btn-delete" data-action="remove-reward">Xóa</button>
+        <div style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:10px;">
+            <input type="text" class="form-control reward-name" style="margin-bottom:0;" placeholder="Tên phần thưởng" value="${reward ? escapeHtml(reward.name) : ''}">
+            <input type="number" class="form-control reward-odds" style="margin-bottom:0;" placeholder="Tỉ lệ %" step="0.01" min="0" max="100" value="${reward ? reward.odds : ''}">
+            <input type="number" class="form-control reward-qty" style="margin-bottom:0;" placeholder="Số lượng" min="0" value="${reward ? reward.quantity : ''}">
+            <button type="button" class="btn-sm btn-delete" data-action="remove-reward">Xóa</button>
+        </div>
+        <div style="margin-bottom:10px;">
+            <label style="display:block; font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;">Ảnh phần thưởng (link) hoặc mô tả ảnh nếu chưa có link</label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <input type="url" class="form-control reward-image" style="margin-bottom:0;" placeholder="Link ảnh phần thưởng" value="${reward ? escapeHtml(reward.image || '') : ''}">
+                <input type="text" class="form-control reward-image-desc" style="margin-bottom:0;" placeholder="Hoặc mô tả ảnh, VD: Acc Liên Quân Full Tướng" value="${reward ? escapeHtml(reward.imageDesc || '') : ''}">
+            </div>
+        </div>
+        <div style="background:rgba(16,185,129,0.07); border:1px dashed #10b981; border-radius:6px; padding:8px 10px;">
+            <label style="display:block; font-size:0.72rem; color:#10b981; font-weight:bold; margin-bottom:4px;">
+                <i class="fa-solid fa-gift"></i> Nếu đây là quà ACC FREE — điền tài khoản/mật khẩu, hệ thống sẽ tự trả cho khách ngay khi trúng
+            </label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <input type="text" class="form-control reward-account" style="margin-bottom:0;" placeholder="Tài khoản" value="${reward ? escapeHtml(reward.account || '') : ''}">
+                <input type="text" class="form-control reward-password" style="margin-bottom:0;" placeholder="Mật khẩu" value="${reward ? escapeHtml(reward.password || '') : ''}">
+            </div>
+        </div>
     `;
     container.appendChild(row);
 }
@@ -834,8 +873,11 @@ async function saveEvent(event) {
         id: row.dataset.rewardId || undefined,
         name: row.querySelector('.reward-name').value.trim(),
         image: row.querySelector('.reward-image').value.trim(),
+        imageDesc: row.querySelector('.reward-image-desc').value.trim(),
         odds: parseFloat(row.querySelector('.reward-odds').value) || 0,
-        quantity: parseInt(row.querySelector('.reward-qty').value, 10) || 0
+        quantity: parseInt(row.querySelector('.reward-qty').value, 10) || 0,
+        account: row.querySelector('.reward-account').value.trim(),
+        password: row.querySelector('.reward-password').value.trim()
     })).filter(r => r.name);
 
     const payload = {

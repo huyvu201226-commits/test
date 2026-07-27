@@ -75,7 +75,17 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 // Lớp lưu trữ: đọc toàn bộ DB vào bộ nhớ khi khởi động, mọi thay đổi
 // được ghi lại xuống đĩa ngay lập tức (nối tiếp nhau, tránh ghi đè chéo).
 // ------------------------------------------------------------
-let db = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+// Đọc an toàn: nếu file local rỗng/không tồn tại/nội dung JSON hỏng thì dùng {} thay vì
+// làm sập cả server ngay từ lúc khởi động (dữ liệu thật vẫn nạp từ MongoDB ngay sau đó,
+// xem loadFromMongo() — file local chỉ là bản backup/khởi động tạm).
+let db;
+try {
+    const raw = fs.readFileSync(DB_PATH, 'utf-8').trim();
+    db = raw ? JSON.parse(raw) : {};
+} catch (err) {
+    console.warn(`Không đọc được ${DB_PATH} (${err.message}) — khởi động tạm với dữ liệu rỗng, sẽ nạp lại từ MongoDB.`);
+    db = {};
+}
 // Khởi tạo mặc định ngay từ lần đọc file local (trước khi biết có Mongo hay không) —
 // đảm bảo db.eventRequests và các field mới của event luôn tồn tại kể cả khi server
 // chạy tạm thời trên dữ liệu local (Mongo chưa kết nối xong).
@@ -241,6 +251,20 @@ function actorLabel(req) {
 }
 
 // ------------------------------------------------------------
+// Ô "Thời gian bắt đầu/kết thúc" trong trang quản trị là <input type="datetime-local">, trả về
+// chuỗi KHÔNG có múi giờ (VD "2026-07-27T09:00"). Nếu parse thẳng bằng new Date(...), Node sẽ
+// hiểu chuỗi này theo múi giờ HỆ THỐNG MÁY CHỦ (thường là UTC trên các nền tảng như Render) thay
+// vì giờ Việt Nam mà Admin thực sự nhập — lệch tới 7 tiếng, khiến sự kiện bị tính sai là "chưa bắt
+// đầu"/"đã kết thúc" ngay trong lúc đang diễn ra theo giờ VN, làm khách không chơi được dù Admin
+// thấy sự kiện đang chạy bình thường. Luôn gắn cứng offset +07:00 (giờ Việt Nam) khi parse ở đây.
+function parseVnDateTime(str) {
+    if (!str) return null;
+    if (/Z$|[+-]\d{2}:\d{2}$/.test(str)) return new Date(str);
+    const hasSeconds = /T\d{2}:\d{2}:\d{2}/.test(str);
+    return new Date(hasSeconds ? `${str}+07:00` : `${str}:00+07:00`);
+}
+
+// ------------------------------------------------------------
 // Sự kiện: trạng thái hiển thị cho khách —
 //   'hidden' = không hiện gì cả (status "an", hoặc đã hết thời gian kết thúc)
 //   'locked' = hiện mờ + thông báo hướng dẫn (status "tam_khoa", hoặc chưa tới ngày bắt đầu) —
@@ -251,9 +275,9 @@ function actorLabel(req) {
 function eventDisplayState(ev) {
     if (ev.status === 'an') return 'hidden';
     const now = Date.now();
-    if (ev.endTime && now > new Date(ev.endTime).getTime()) return 'hidden';
+    if (ev.endTime && now > parseVnDateTime(ev.endTime).getTime()) return 'hidden';
     if (ev.status === 'tam_khoa') return 'locked';
-    if (ev.startTime && now < new Date(ev.startTime).getTime()) return 'locked';
+    if (ev.startTime && now < parseVnDateTime(ev.startTime).getTime()) return 'locked';
     return 'active';
 }
 // Giữ lại tên hàm cũ cho các đoạn code khác còn gọi tới (tương đương displayState === 'active')
@@ -263,7 +287,9 @@ function isEventActive(ev) {
 function publicEvent(ev) {
     return {
         ...ev,
-        rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, remaining: r.remaining })),
+        // Chỉ lộ ảnh/mô tả ảnh + số lượng còn lại ra ngoài — TUYỆT ĐỐI không gửi account/password
+        // của phần thưởng "acc free" cho khách khi chưa trúng thưởng.
+        rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, imageDesc: r.imageDesc, remaining: r.remaining })),
         displayState: eventDisplayState(ev)
     };
 }
@@ -272,6 +298,7 @@ function publicEvent(ev) {
 // Trạng thái theo thiết bị (mã định danh trình duyệt do client tự sinh, gửi kèm mỗi request).
 // ------------------------------------------------------------
 function getDeviceState(code) {
+    if (!db.deviceState) db.deviceState = {};
     if (!db.deviceState[code]) {
         db.deviceState[code] = { discountUsed: false, promoSpin: null, freeSpin: null, events: {} };
     }
@@ -597,12 +624,22 @@ app.post('/api/events/:id/spin', (req, res) => {
     state.events[ev.id] = evState;
     persist();
 
+    // Khi trúng phần thưởng có sẵn account/password (quà acc free), trả luôn cho đúng khách vừa
+    // trúng ở đây — đây là lần DUY NHẤT thông tin này rời khỏi server (không lộ qua danh sách
+    // sự kiện công khai, xem publicEvent()).
     res.json({
         alreadySpun: false,
         won: !!wonReward,
         playsUsed: evState.playsUsed,
         maxPlays,
-        prize: wonReward ? { id: wonReward.id, name: wonReward.name, image: wonReward.image } : null
+        prize: wonReward ? {
+            id: wonReward.id,
+            name: wonReward.name,
+            image: wonReward.image,
+            imageDesc: wonReward.imageDesc || '',
+            account: wonReward.account || '',
+            password: wonReward.password || ''
+        } : null
     });
 });
 
@@ -913,9 +950,14 @@ app.post('/api/events', requireAdmin, (req, res) => {
         id: 'rw_' + Date.now() + '_' + i,
         name: r.name,
         image: r.image || '',
+        imageDesc: r.imageDesc || '', // mô tả ảnh dùng khi không có link ảnh
         odds: Number(r.odds) || 0,
         quantity: Number(r.quantity) || 0,
-        remaining: Number(r.quantity) || 0
+        remaining: Number(r.quantity) || 0,
+        // Tài khoản/mật khẩu của quà acc free — chỉ trả về cho khách khi trúng (xem /spin), không
+        // bao giờ lộ qua publicEvent()
+        account: r.account || '',
+        password: r.password || ''
     }));
     const ev = normalizeEvent({
         ...req.body,
@@ -947,9 +989,12 @@ app.put('/api/events/:id', requireAdmin, (req, res) => {
                 id: old ? old.id : 'rw_' + Date.now() + '_' + i,
                 name: r.name,
                 image: r.image || '',
+                imageDesc: r.imageDesc || '',
                 odds: Number(r.odds) || 0,
                 quantity,
-                remaining: old ? Math.min(old.remaining, quantity) : quantity
+                remaining: old ? Math.min(old.remaining, quantity) : quantity,
+                account: r.account || '',
+                password: r.password || ''
             };
         });
     }

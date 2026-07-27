@@ -245,6 +245,28 @@
         </div>
     </div>
 
+    <!-- Modal Trúng Thưởng Sự Kiện -->
+    <div class="modal-overlay" id="eventPrizeModal">
+        <div class="modal-card animate-pop" style="text-align:center;">
+            <button class="btn-close-modal" onclick="closeEventPrizeModal()">&times;</button>
+            <i class="fa-solid fa-trophy" style="font-size:2.4rem; color: var(--gold); margin-bottom:8px;"></i>
+            <h3 style="margin-bottom: 10px;">Chúc Mừng Bạn Đã Trúng Thưởng!</h3>
+            <img id="eventPrizeImg" src="" alt="Ảnh phần thưởng" style="width:90px;height:90px;border-radius:10px;object-fit:cover;margin:0 auto 10px;">
+            <div id="eventPrizeName" style="font-weight:800; font-size:1.05rem; margin-bottom:6px;"></div>
+            <div id="eventPrizeDesc" style="font-size:0.85rem; color: var(--text-muted); margin-bottom:10px;"></div>
+
+            <div id="eventPrizeAccBox" style="display:none; text-align:left; background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                <div style="font-size:0.8rem; color: var(--text-muted); margin-bottom:2px;">Tài khoản</div>
+                <div id="eventPrizeAccount" style="font-weight:700; margin-bottom:8px; word-break:break-all;"></div>
+                <div style="font-size:0.8rem; color: var(--text-muted); margin-bottom:2px;">Mật khẩu</div>
+                <div id="eventPrizePassword" style="font-weight:700; word-break:break-all;"></div>
+                <button class="btn-submit" style="margin-top:10px;" onclick="copyEventPrizeCreds()">Sao Chép Tài Khoản/Mật Khẩu</button>
+            </div>
+
+            <p id="eventPrizeContactNote" style="font-size: 0.85rem; color: var(--text-muted);">Vui lòng liên hệ Zalo Admin để được nhận thưởng.</p>
+        </div>
+    </div>
+
     <!-- Modal Thanh Toán QR Tự Động -->
     <div class="modal-overlay" id="buyModal">
         <div class="modal-card animate-pop">
@@ -304,6 +326,11 @@
     </div>
 
     <script src="data.js?v=20260728a" defer></script>
-    <script src="script.js?v=20260728a" defer></script>
+    <script src="script.js?v=20260728a" defer></script>    <!-- Bong Bóng Chat Hỗ Trợ (Zalo/Messenger) — luôn nổi ở mọi tab, bấm vào mở ứng dụng chat -->
+    <a class="support-chat-bubble" href="https://m.me/huy.uc.667581?hash=AbaKwYS2r8Ils3Cu&source_id=8585216" target="_blank" rel="noopener noreferrer" aria-label="Chat hỗ trợ Zalo/Messenger">
+        <span class="support-chat-bubble-label">Chat hỗ trợ ngay</span>
+        <i class="fa-brands fa-facebook-messenger"></i>
+    </a>
+
 </body>
 </html>

@@ -25,18 +25,7 @@
       "img": "/files/6a65b5ff328e2239244081e2"
     }
   ],
-  "activityLog": [
-    {
-      "time": 1785104827262,
-      "action": "Đổi mật khẩu quản trị",
-      "detail": "Mật khẩu đăng nhập trang quản trị đã được thay đổi."
-    },
-    {
-      "time": 1785102043980,
-      "action": "Đổi mật khẩu quản trị",
-      "detail": "Mật khẩu đăng nhập trang quản trị đã được thay đổi."
-    }
-  ],
+  "activityLog": [],
   "deviceState": {
     "JH-DISC-FK17DU": {
       "discountUsed": false,
@@ -93,7 +82,7 @@
         "won": false
       },
       "freeSpin": {
-        "day": "2026-07-26",
+        "day": "2026-07-27",
         "spun": true,
         "won": false,
         "prizeCode": null
@@ -121,7 +110,12 @@
     "JH-DISC-MI2NM1": {
       "discountUsed": false,
       "promoSpin": null,
-      "freeSpin": null,
+      "freeSpin": {
+        "day": "2026-07-27",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     },
     "JH-DISC-8RESAA": {
@@ -137,6 +131,39 @@
       "events": {}
     },
     "JH-DISC-WYFXPP": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-R8VZ18": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-3B4EUO": {
+      "discountUsed": false,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
+      "freeSpin": {
+        "day": "2026-07-27",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
+      "events": {}
+    },
+    "JH-DISC-4HJC8N": {
+      "discountUsed": false,
+      "promoSpin": null,
+      "freeSpin": null,
+      "events": {}
+    },
+    "JH-DISC-QQ9UOT": {
       "discountUsed": false,
       "promoSpin": null,
       "freeSpin": null,

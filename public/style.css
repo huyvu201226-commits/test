@@ -627,6 +627,20 @@ img, svg, video, iframe { max-width: 100%; }
     font-weight: bold;
 }
 
+/* Badge % giảm giá hiện ở góc TRÁI trên ảnh acc — gộp mức giảm tốt nhất đang có (mã 5%/thiết bị
+   hoặc % của sự kiện Giảm Deal/Quay Là Trúng, lấy % cao hơn) */
+.acc-discount-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    background: #ef4444;
+    color: white;
+}
+
 /* Pill không định vị tuyệt đối, dùng để hiển thị badge loại acc ngay trong nội dung (khác với
    .acc-status-badge vốn định vị tuyệt đối để đè lên góc ảnh) */
 .type-pill { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 0.72rem; font-weight: bold; white-space: nowrap; }
@@ -665,6 +679,21 @@ img, svg, video, iframe { max-width: 100%; }
     font-weight: 800;
     color: #22c55e;
     margin-top: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.acc-price-old {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.acc-price-new {
+    color: #22c55e;
 }
 
 .btn-action-acc {
@@ -820,4 +849,60 @@ img, svg, video, iframe { max-width: 100%; }
     font-size: 0.8rem;
     margin-top: -2vh;
     margin-bottom: 2vh;
+}
+
+/* ------------------------------------------------------------------
+   Bong bóng chat hỗ trợ (Zalo/Messenger) — nổi cố định góc dưới bên
+   phải màn hình, bấm vào chuyển hướng sang ứng dụng chat để Admin hỗ trợ.
+   ------------------------------------------------------------------ */
+.support-chat-bubble {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0084ff, #00c6ff);
+    box-shadow: 0 4px 16px rgba(0, 132, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.6rem;
+    text-decoration: none;
+    z-index: 4000;
+    animation: support-bubble-pulse 2.2s infinite;
+}
+
+.support-chat-bubble:hover { filter: brightness(1.1); }
+
+.support-chat-bubble-label {
+    position: absolute;
+    right: 68px;
+    bottom: 14px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.support-chat-bubble:hover .support-chat-bubble-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+@keyframes support-bubble-pulse {
+    0%, 100% { box-shadow: 0 4px 16px rgba(0, 132, 255, 0.5); }
+    50% { box-shadow: 0 4px 22px rgba(0, 132, 255, 0.85); }
+}
+
+@media (max-width: 480px) {
+    .support-chat-bubble { right: 14px; bottom: 14px; width: 52px; height: 52px; font-size: 1.4rem; }
+    .support-chat-bubble-label { display: none; }
 }
