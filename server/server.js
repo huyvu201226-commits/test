@@ -68,6 +68,12 @@ const TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 giờ
 const WIN_PROBABILITY = 1 / 1000;
 const MAX_LOG_ENTRIES = 200;
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
+// Tài khoản khách hàng: số lần nhập sai mật khẩu tối đa trước khi tự động khóa tài khoản
+// (khách phải gửi yêu cầu khôi phục, Admin xác minh đúng chủ tài khoản rồi mới mở lại).
+const CUSTOMER_MAX_FAILED_ATTEMPTS = 5;
+// Yêu cầu mua acc / tham gia sự kiện: thời gian chờ Admin duyệt trước khi hiện nút "Chat Zalo
+// để được hỗ trợ" cho khách (không tự hủy yêu cầu, chỉ để khách biết cách liên hệ nếu chờ lâu).
+const PAYMENT_REVIEW_WINDOW_MS = 5 * 60 * 1000;
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -91,6 +97,9 @@ try {
 // chạy tạm thời trên dữ liệu local (Mongo chưa kết nối xong).
 ensureEventsInitialized();
 ensureEventRequestsInitialized();
+ensureCustomersInitialized();
+ensurePasswordRecoveryRequestsInitialized();
+ensurePurchaseRequestsInitialized();
 let saveQueue = Promise.resolve();
 function persist() {
 
@@ -161,6 +170,65 @@ function ensureCollaboratorsInitialized() {
 }
 
 // ------------------------------------------------------------
+// Tài khoản khách hàng — bắt buộc phải đăng ký/đăng nhập trước khi mua acc hoặc tham gia
+// sự kiện có thu phí (xem khối "YÊU CẦU MUA / THAM GIA SỰ KIỆN" phía dưới).
+// Mật khẩu được lưu 2 dạng song song:
+//   - passwordHash/passwordSalt: băm một chiều (SHA-256 + salt) — dùng để XÁC THỰC đăng nhập,
+//     không thể đảo ngược lại thành mật khẩu gốc, kể cả Admin cũng không đọc được từ đây.
+//   - passwordEncrypted: mã hóa HAI CHIỀU (AES-256-GCM) bằng khóa bí mật riêng của shop, CHỈ
+//     dùng cho tính năng "Admin xem lại mật khẩu" khi khách quên/bị khóa và đã xác minh đúng là
+//     chủ tài khoản (qua Zalo) — theo đúng yêu cầu nghiệp vụ của shop. Route xem lại đặt trong
+//     khu vực requireAdmin, có ghi log mỗi lần dùng.
+// ------------------------------------------------------------
+function ensureCustomersInitialized() {
+    if (!Array.isArray(db.customers)) db.customers = [];
+}
+function ensurePasswordRecoveryRequestsInitialized() {
+    if (!Array.isArray(db.passwordRecoveryRequests)) db.passwordRecoveryRequests = [];
+}
+function publicCustomer(c) {
+    const { passwordHash, passwordSalt, passwordEncrypted, ...rest } = c;
+    return rest;
+}
+function ensureCustomerSecretInitialized() {
+    if (!db.settings.customerSecretKey) {
+        db.settings.customerSecretKey = crypto.randomBytes(32).toString('hex');
+        persist();
+    }
+}
+function encryptCustomerPassword(plainPassword) {
+    ensureCustomerSecretInitialized();
+    const key = Buffer.from(db.settings.customerSecretKey, 'hex');
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(String(plainPassword), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+function decryptCustomerPassword(payload) {
+    ensureCustomerSecretInitialized();
+    try {
+        const key = Buffer.from(db.settings.customerSecretKey, 'hex');
+        const [ivHex, tagHex, dataHex] = String(payload || '').split(':');
+        if (!ivHex || !tagHex || !dataHex) return null;
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+        const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex, 'hex')), decipher.final()]);
+        return decrypted.toString('utf8');
+    } catch (err) {
+        return null; // dữ liệu hỏng/khóa bí mật đã đổi — Admin sẽ dùng chức năng "Đặt lại mật khẩu" thay thế
+    }
+}
+// Sinh mật khẩu tạm ngẫu nhiên, dễ đọc (chữ hoa/thường/số), dùng khi Admin bấm "Đặt lại mật khẩu"
+// cho khách quên mật khẩu mà không cần biết mật khẩu cũ.
+function generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let out = '';
+    for (let i = 0; i < 8; i++) out += chars[crypto.randomInt(chars.length)];
+    return out;
+}
+
+// ------------------------------------------------------------
 // Giai đoạn 2 — tầng dùng chung cho 4 sự kiện (Giảm Deal / Vòng Quay / Đập Thỏ / Đập Hộp).
 // normalizeEvent() điền đầy đủ các field mới (khóa QR, giới hạn lượt chơi tổng, thông báo
 // tạm khóa, tốc độ thỏ, số ô hộp...) cho MỌI sự kiện — cả sự kiện cũ (tạo trước bản cập
@@ -205,6 +273,11 @@ function ensureEventsInitialized() {
 function ensureEventRequestsInitialized() {
     if (!Array.isArray(db.eventRequests)) db.eventRequests = [];
 }
+// Yêu cầu mua acc (Kho Tài Khoản Bán) — song song với db.eventRequests ở trên nhưng dành cho
+// việc mua acc thay vì tham gia sự kiện. Xem chi tiết ở khối "YÊU CẦU MUA / THAM GIA" (Phần 2).
+function ensurePurchaseRequestsInitialized() {
+    if (!Array.isArray(db.purchaseRequests)) db.purchaseRequests = [];
+}
 
 // ------------------------------------------------------------
 // Phiên đăng nhập (token ngẫu nhiên lưu trong bộ nhớ, hết hạn sau 12h).
@@ -248,6 +321,16 @@ function requireAccountManager(req, res, next) {
 }
 function actorLabel(req) {
     return req.tokenRole === 'ctv' ? `CTV "${req.tokenUsername}"` : 'Admin';
+}
+// Bắt buộc khách phải đăng nhập tài khoản (đăng ký nếu chưa có) trước khi mua acc hoặc tham
+// gia sự kiện có phí — gắn liền mọi yêu cầu thanh toán với đúng 1 tài khoản khách hàng.
+function requireCustomer(req, res, next) {
+    const found = readToken(req);
+    if (!found || found.info.role !== 'customer') {
+        return res.status(401).json({ error: 'not_logged_in', message: 'Vui lòng đăng nhập (hoặc đăng ký nếu chưa có tài khoản) để tiếp tục.' });
+    }
+    req.customerUsername = found.info.username;
+    next();
 }
 
 // ------------------------------------------------------------
@@ -645,8 +728,11 @@ app.post('/api/events/:id/spin', (req, res) => {
 
 // Khách gửi yêu cầu tham gia sự kiện đang khóa QR (đã chuyển khoản theo QR + số tiền admin
 // đặt) — yêu cầu này rơi vào trạng thái "pending" và chờ Admin duyệt trong trang quản trị.
-app.post('/api/events/:id/request-access', (req, res) => {
-    const { deviceCode, note } = req.body || {};
+// Bắt buộc đã đăng nhập tài khoản khách hàng (requireCustomer) để gắn đúng yêu cầu với đúng
+// người mua — payerName/payerBankAccount là ô dự phòng cho trường hợp khách quên ghi nội dung
+// chuyển khoản, giúp Admin đối chiếu với sao kê ngân hàng để duyệt chính xác.
+app.post('/api/events/:id/request-access', requireCustomer, (req, res) => {
+    const { deviceCode, note, payerName, payerBankAccount } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const ev = db.events.find(e => e.id === req.params.id);
     if (!ev) return res.status(404).json({ error: 'Sự kiện không tồn tại.' });
@@ -655,26 +741,342 @@ app.post('/api/events/:id/request-access', (req, res) => {
     const state = getDeviceState(deviceCode);
     const evState = state.events[ev.id] || { playsUsed: 0, requestStatus: 'none' };
 
-    if (evState.requestStatus === 'pending') return res.json({ ok: true, requestStatus: 'pending' });
+    if (evState.requestStatus === 'pending') {
+        const existing = db.eventRequests.find(r => r.eventId === ev.id && r.deviceCode === deviceCode && r.status === 'pending');
+        return res.json({ ok: true, requestStatus: 'pending', deadlineMs: existing ? existing.deadlineMs : null, requestId: existing ? existing.id : null });
+    }
     if (evState.requestStatus === 'approved') return res.json({ ok: true, requestStatus: 'approved' });
 
     ensureEventRequestsInitialized();
+    const createdAt = Date.now();
     const reqEntry = {
-        id: 'evreq_' + Date.now(),
+        id: 'evreq_' + createdAt,
         eventId: ev.id,
         eventName: ev.name,
         deviceCode,
+        customerUsername: req.customerUsername,
+        payerName: payerName ? String(payerName).slice(0, 100) : '',
+        payerBankAccount: payerBankAccount ? String(payerBankAccount).slice(0, 50) : '',
         note: note ? String(note).slice(0, 300) : '',
         status: 'pending',
-        createdAt: Date.now(),
+        createdAt,
+        deadlineMs: createdAt + PAYMENT_REVIEW_WINDOW_MS,
         resolvedAt: null
     };
     db.eventRequests.unshift(reqEntry);
     evState.requestStatus = 'pending';
     state.events[ev.id] = evState;
-    addActivityLog('Yêu cầu tham gia sự kiện', `Thiết bị ${deviceCode} yêu cầu tham gia sự kiện "${ev.name}".`);
+    addActivityLog('Yêu cầu tham gia sự kiện', `Khách "${req.customerUsername}" (thiết bị ${deviceCode}) yêu cầu tham gia sự kiện "${ev.name}".`);
     persist();
-    res.json({ ok: true, requestStatus: 'pending' });
+    res.json({ ok: true, requestStatus: 'pending', deadlineMs: reqEntry.deadlineMs, requestId: reqEntry.id });
+});
+
+// ===================== YÊU CẦU MUA ACC (Kho Tài Khoản Bán) =====================
+// Song song với luồng "tham gia sự kiện" ở trên nhưng dành cho việc mua acc trực tiếp trong
+// Shop. Khách phải đăng nhập, chọn acc, quét QR thanh toán rồi gửi yêu cầu kèm tên/số tài khoản
+// đã chuyển (phòng khi quên ghi nội dung CK) — Admin đối chiếu ngân hàng đã nhận tiền rồi duyệt
+// ngay trong trang quản trị. Trong lúc chờ, phía khách đếm ngược 5 phút rồi hiện nút chat Zalo
+// nếu Admin chưa kịp duyệt.
+app.post('/api/purchase-requests', requireCustomer, (req, res) => {
+    ensurePurchaseRequestsInitialized();
+    const { accountId, payerName, payerBankAccount, note } = req.body || {};
+    const id = Number(accountId);
+    const acc = db.accounts.find(a => a.id === id);
+    if (!acc) return res.status(404).json({ error: 'Không tìm thấy acc.' });
+    if (acc.status !== 'selling') return res.status(400).json({ error: 'Acc này hiện không khả dụng để mua.' });
+
+    const existing = db.purchaseRequests.find(r => r.accountId === id && r.customerUsername === req.customerUsername && r.status === 'pending');
+    if (existing) return res.json({ ok: true, status: 'pending', requestId: existing.id, deadlineMs: existing.deadlineMs });
+
+    const createdAt = Date.now();
+    const reqEntry = {
+        id: 'pr_' + createdAt,
+        customerUsername: req.customerUsername,
+        accountId: acc.id,
+        accountCode: acc.code,
+        accountName: acc.name,
+        accountPrice: acc.price,
+        payerName: payerName ? String(payerName).slice(0, 100) : '',
+        payerBankAccount: payerBankAccount ? String(payerBankAccount).slice(0, 50) : '',
+        note: note ? String(note).slice(0, 300) : '',
+        status: 'pending', // pending | approved | rejected
+        createdAt,
+        deadlineMs: createdAt + PAYMENT_REVIEW_WINDOW_MS,
+        resolvedAt: null
+    };
+    db.purchaseRequests.unshift(reqEntry);
+    addActivityLog('Yêu cầu mua acc', `Khách "${req.customerUsername}" gửi yêu cầu mua acc ${acc.code} (${acc.name}).`);
+    persist();
+    res.json({ ok: true, status: 'pending', requestId: reqEntry.id, deadlineMs: reqEntry.deadlineMs });
+});
+
+// Khách tự xem lại trạng thái các yêu cầu mua acc của mình (dùng để đếm ngược 5 phút + biết khi
+// nào được duyệt mà không cần tải lại trang).
+app.get('/api/purchase-requests/mine', requireCustomer, (req, res) => {
+    ensurePurchaseRequestsInitialized();
+    const mine = db.purchaseRequests.filter(r => r.customerUsername === req.customerUsername).slice(0, 30);
+    res.json(mine);
+});
+
+// --- Admin: xem & duyệt/từ chối yêu cầu mua acc ---
+app.get('/api/admin/purchase-requests', requireAdmin, (req, res) => {
+    ensurePurchaseRequestsInitialized();
+    res.json(db.purchaseRequests);
+});
+
+app.put('/api/admin/purchase-requests/:id/approve', requireAdmin, (req, res) => {
+    ensurePurchaseRequestsInitialized();
+    const reqEntry = db.purchaseRequests.find(r => r.id === req.params.id);
+    if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
+    if (reqEntry.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu này đã được xử lý trước đó.' });
+
+    reqEntry.status = 'approved';
+    reqEntry.resolvedAt = Date.now();
+
+    const acc = db.accounts.find(a => a.id === reqEntry.accountId);
+    if (acc && acc.status === 'selling') acc.status = 'sold';
+
+    addActivityLog('Duyệt yêu cầu mua acc', `Đã duyệt khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}). [${actorLabel(req)}]`);
+    persist();
+    res.json(reqEntry);
+});
+
+app.put('/api/admin/purchase-requests/:id/reject', requireAdmin, (req, res) => {
+    ensurePurchaseRequestsInitialized();
+    const reqEntry = db.purchaseRequests.find(r => r.id === req.params.id);
+    if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
+    if (reqEntry.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu này đã được xử lý trước đó.' });
+
+    const { reason } = req.body || {};
+    reqEntry.status = 'rejected';
+    reqEntry.resolvedAt = Date.now();
+    reqEntry.rejectReason = reason ? String(reason).slice(0, 300) : '';
+
+    addActivityLog('Từ chối yêu cầu mua acc', `Đã từ chối khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}).${reason ? ' Lý do: ' + reason : ''} [${actorLabel(req)}]`);
+    persist();
+    res.json(reqEntry);
+});
+
+
+
+// ===================== TÀI KHOẢN KHÁCH HÀNG =====================
+// Khách bắt buộc phải có tài khoản trước khi mua acc hoặc tham gia sự kiện có phí: nếu chưa có
+// thì đăng ký, nếu đã có thì đăng nhập. Tên tài khoản đi kèm mỗi yêu cầu mua/tham gia gửi vào
+// trang Admin, nên khuyến khích khách đặt tên dễ nhớ (chỉ chữ/số, không dấu, không khoảng trắng).
+
+app.post('/api/customer/register', loginLimiter, (req, res) => {
+    ensureCustomersInitialized();
+    const { username, password } = req.body || {};
+    const uname = String(username || '').trim();
+
+    if (!uname || uname.length < 3 || uname.length > 32) {
+        return res.status(400).json({ error: 'Tên tài khoản phải từ 3-32 ký tự.' });
+    }
+    if (!/^[a-zA-Z0-9_.]+$/.test(uname)) {
+        return res.status(400).json({ error: 'Tên tài khoản chỉ nên gồm chữ, số, dấu gạch dưới/chấm (không dấu, không khoảng trắng) để dễ nhớ và dễ nhập khi thanh toán.' });
+    }
+    if (!password || password.length < 6) {
+        return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự.' });
+    }
+    if (db.customers.some(c => c.username.toLowerCase() === uname.toLowerCase())) {
+        return res.status(400).json({ error: 'Tên tài khoản này đã có người đăng ký, vui lòng chọn tên khác.' });
+    }
+
+    const salt = generateSalt();
+    const customer = {
+        id: 'cus_' + Date.now(),
+        username: uname,
+        passwordHash: hashPassword(password, salt),
+        passwordSalt: salt,
+        passwordEncrypted: encryptCustomerPassword(password),
+        status: 'active', // active | locked
+        failedAttempts: 0,
+        lockedAt: null,
+        lockReason: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+    };
+    db.customers.unshift(customer);
+    addActivityLog('Khách đăng ký tài khoản', `Tài khoản khách hàng mới: "${uname}".`);
+    persist();
+    res.json({ token: issueToken('customer', uname), username: uname });
+});
+
+app.post('/api/customer/login', loginLimiter, (req, res) => {
+    ensureCustomersInitialized();
+    const { username, password } = req.body || {};
+    const uname = String(username || '').trim();
+    const customer = db.customers.find(c => c.username.toLowerCase() === uname.toLowerCase());
+    if (!customer) return res.status(401).json({ error: 'Sai tên tài khoản hoặc mật khẩu.' });
+
+    if (customer.status === 'locked') {
+        return res.status(423).json({
+            error: 'locked',
+            message: 'Tài khoản đã bị tạm khóa (do nhập sai mật khẩu quá nhiều lần hoặc theo yêu cầu Admin). Vui lòng bấm "Quên mật khẩu" hoặc liên hệ Zalo Admin để được hỗ trợ mở khóa.'
+        });
+    }
+
+    const hash = hashPassword(password || '', customer.passwordSalt);
+    if (hash !== customer.passwordHash) {
+        customer.failedAttempts = (customer.failedAttempts || 0) + 1;
+        if (customer.failedAttempts >= CUSTOMER_MAX_FAILED_ATTEMPTS) {
+            customer.status = 'locked';
+            customer.lockedAt = Date.now();
+            customer.lockReason = 'Nhập sai mật khẩu quá nhiều lần';
+            addActivityLog('Tài khoản khách tự động bị khóa', `Tài khoản "${customer.username}" bị khóa do nhập sai mật khẩu ${CUSTOMER_MAX_FAILED_ATTEMPTS} lần liên tiếp.`);
+            persist();
+            return res.status(423).json({
+                error: 'locked',
+                message: `Tài khoản đã bị khóa do nhập sai mật khẩu ${CUSTOMER_MAX_FAILED_ATTEMPTS} lần liên tiếp. Vui lòng bấm "Quên mật khẩu" hoặc liên hệ Zalo Admin để được hỗ trợ.`
+            });
+        }
+        persist();
+        return res.status(401).json({
+            error: 'Sai tên tài khoản hoặc mật khẩu.',
+            attemptsLeft: CUSTOMER_MAX_FAILED_ATTEMPTS - customer.failedAttempts
+        });
+    }
+
+    customer.failedAttempts = 0;
+    customer.updatedAt = Date.now();
+    persist();
+    res.json({ token: issueToken('customer', customer.username), username: customer.username });
+});
+
+app.post('/api/customer/logout', requireCustomer, (req, res) => {
+    const token = req.headers.authorization.slice(7);
+    tokens.delete(token);
+    res.json({ ok: true });
+});
+
+app.get('/api/customer/me', requireCustomer, (req, res) => {
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.username === req.customerUsername);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    res.json(publicCustomer(customer));
+});
+
+// Khách quên mật khẩu (hoặc tài khoản đã bị khóa do sai quá nhiều lần) — gửi yêu cầu kèm ghi
+// chú (VD: số điện thoại/Zalo liên hệ) để Admin xác minh đúng là chủ tài khoản (qua Zalo) rồi
+// mới xem lại/đặt lại mật khẩu trong trang quản trị. Không tự lộ thông tin qua route này.
+app.post('/api/customer/recovery-request', loginLimiter, (req, res) => {
+    ensureCustomersInitialized();
+    ensurePasswordRecoveryRequestsInitialized();
+    const { username, note } = req.body || {};
+    const uname = String(username || '').trim();
+    const customer = db.customers.find(c => c.username.toLowerCase() === uname.toLowerCase());
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản với tên này.' });
+
+    const reqEntry = {
+        id: 'pwreq_' + Date.now(),
+        customerId: customer.id,
+        username: customer.username,
+        note: note ? String(note).slice(0, 300) : '',
+        status: 'pending', // pending | resolved
+        createdAt: Date.now(),
+        resolvedAt: null
+    };
+    db.passwordRecoveryRequests.unshift(reqEntry);
+    addActivityLog('Yêu cầu khôi phục mật khẩu', `Khách "${customer.username}" gửi yêu cầu khôi phục/mở khóa tài khoản.`);
+    persist();
+    res.json({ ok: true, message: 'Đã gửi yêu cầu. Vui lòng nhắn Zalo Admin để xác minh chủ tài khoản — Admin sẽ hỗ trợ cấp lại mật khẩu ngay khi xác minh xong.' });
+});
+
+// ===================== ADMIN: QUẢN LÝ KHÁCH HÀNG =====================
+// Khóa/mở khóa, xóa, xem lại/đặt lại mật khẩu cho tài khoản khách hàng, và duyệt các yêu cầu
+// khôi phục mật khẩu khách gửi lên (mục "TÀI KHOẢN KHÁCH HÀNG" phía trên). Mọi thao tác nhạy
+// cảm (xem/đặt lại mật khẩu) đều được ghi vào Nhật Ký Hoạt Động.
+
+app.get('/api/admin/customers', requireAdmin, (req, res) => {
+    ensureCustomersInitialized();
+    res.json(db.customers.map(publicCustomer));
+});
+
+app.put('/api/admin/customers/:id/toggle-lock', requireAdmin, (req, res) => {
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.id === req.params.id);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    const { reason } = req.body || {};
+    if (customer.status === 'locked') {
+        customer.status = 'active';
+        customer.failedAttempts = 0;
+        customer.lockedAt = null;
+        customer.lockReason = null;
+        addActivityLog('Mở khóa tài khoản khách hàng', `Tài khoản khách "${customer.username}" đã được mở khóa. [${actorLabel(req)}]`);
+    } else {
+        customer.status = 'locked';
+        customer.lockedAt = Date.now();
+        customer.lockReason = reason ? String(reason).slice(0, 300) : 'Bị Admin khóa thủ công';
+        addActivityLog('Khóa tài khoản khách hàng', `Tài khoản khách "${customer.username}" đã bị khóa.${reason ? ' Lý do: ' + reason : ''} [${actorLabel(req)}]`);
+    }
+    customer.updatedAt = Date.now();
+    persist();
+    res.json(publicCustomer(customer));
+});
+
+app.delete('/api/admin/customers/:id', requireAdmin, (req, res) => {
+    ensureCustomersInitialized();
+    const idx = db.customers.findIndex(c => c.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    const [removed] = db.customers.splice(idx, 1);
+    addActivityLog('Xóa tài khoản khách hàng', `Đã xóa tài khoản khách "${removed.username}". [${actorLabel(req)}]`);
+    persist();
+    res.json({ ok: true });
+});
+
+// Xem lại mật khẩu gốc (giải mã AES) — chỉ dùng sau khi đã xác minh đúng chủ tài khoản qua
+// Zalo. Ghi log mỗi lần dùng vì đây là thao tác nhạy cảm.
+app.get('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.id === req.params.id);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    const plain = decryptCustomerPassword(customer.passwordEncrypted);
+    if (plain == null) return res.status(500).json({ error: 'Không thể giải mã mật khẩu (dữ liệu cũ/hỏng) — hãy dùng "Đặt lại mật khẩu" thay thế.' });
+    addActivityLog('Xem lại mật khẩu khách hàng', `Đã xem lại mật khẩu của tài khoản khách "${customer.username}". [${actorLabel(req)}]`);
+    persist();
+    res.json({ username: customer.username, password: plain });
+});
+
+// Đặt lại mật khẩu bằng 1 mật khẩu tạm ngẫu nhiên (khi không giải mã được / khách muốn đổi hẳn
+// mật khẩu mới) — tự mở khóa và xóa số lần nhập sai luôn để khách đăng nhập lại được ngay.
+app.put('/api/admin/customers/:id/reset-password', requireAdmin, (req, res) => {
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.id === req.params.id);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+    const tempPassword = generateTempPassword();
+    const salt = generateSalt();
+    customer.passwordHash = hashPassword(tempPassword, salt);
+    customer.passwordSalt = salt;
+    customer.passwordEncrypted = encryptCustomerPassword(tempPassword);
+    customer.status = 'active';
+    customer.failedAttempts = 0;
+    customer.lockedAt = null;
+    customer.lockReason = null;
+    customer.updatedAt = Date.now();
+
+    addActivityLog('Đặt lại mật khẩu khách hàng', `Đã cấp mật khẩu tạm mới cho tài khoản khách "${customer.username}". [${actorLabel(req)}]`);
+    persist();
+    res.json({ username: customer.username, tempPassword });
+});
+
+// --- Yêu cầu khôi phục mật khẩu (khách gửi qua /api/customer/recovery-request) ---
+app.get('/api/admin/password-recovery-requests', requireAdmin, (req, res) => {
+    ensurePasswordRecoveryRequestsInitialized();
+    res.json(db.passwordRecoveryRequests);
+});
+
+app.put('/api/admin/password-recovery-requests/:id/resolve', requireAdmin, (req, res) => {
+    ensurePasswordRecoveryRequestsInitialized();
+    const reqEntry = db.passwordRecoveryRequests.find(r => r.id === req.params.id);
+    if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
+    if (reqEntry.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu này đã được xử lý trước đó.' });
+
+    reqEntry.status = 'resolved';
+    reqEntry.resolvedAt = Date.now();
+    addActivityLog('Xử lý yêu cầu khôi phục mật khẩu', `Đã xử lý xong yêu cầu khôi phục của khách "${reqEntry.username}". [${actorLabel(req)}]`);
+    persist();
+    res.json(reqEntry);
 });
 
 // ===================== ĐĂNG NHẬP ADMIN =====================
@@ -711,12 +1113,18 @@ app.post('/api/admin/change-password', requireAdmin, (req, res) => {
 
 app.get('/api/admin/state', requireAdmin, (req, res) => {
     ensureEventRequestsInitialized();
+    ensurePurchaseRequestsInitialized();
+    ensureCustomersInitialized();
+    ensurePasswordRecoveryRequestsInitialized();
     res.json({
         accounts: db.accounts,
         freeAccounts: db.freeAccounts,
         settings: publicSettings(db.settings),
         events: db.events,
         eventRequests: db.eventRequests,
+        purchaseRequests: db.purchaseRequests,
+        customers: db.customers.map(publicCustomer),
+        passwordRecoveryRequests: db.passwordRecoveryRequests,
         activityLog: db.activityLog
     });
 });
@@ -1100,6 +1508,9 @@ connectMongo().then(async ()=>{
     // đầy đủ field mới của Giai đoạn 2 và db.eventRequests tồn tại.
     ensureEventsInitialized();
     ensureEventRequestsInitialized();
+    ensureCustomersInitialized();
+    ensurePasswordRecoveryRequestsInitialized();
+    ensurePurchaseRequestsInitialized();
     persist();
 
 

@@ -1,31 +1,193 @@
 {
   "accounts": [
     {
-      "id": 1785054342125,
-      "code": "02",
-      "name": "billow",
-      "info": "",
-      "description": "",
-      "price": 550000,
+      "id": 1785143337848,
+      "code": "reg-10",
+      "name": "reg bijan",
+      "info": "rank đồng",
+      "description": "0g\ntlt 0\nut 100\n13t/3skin\n66k vàng \nreg bijan hoàng kim\nrương s+\ntttklk",
+      "price": 55000,
       "category": "cheap",
-      "type": "vip",
+      "type": "reg",
       "status": "selling",
-      "img": "/files/6a65c4850a282220f330eea9"
+      "img": "/files/6a6720294fdd33ee9932693d"
     },
     {
-      "id": 1785048638674,
-      "code": "01",
-      "name": "qlen",
-      "info": "Rank vàng hiện tại 57t/78skin ut100 1k",
-      "description": "qlen ngịch thiên long đé \nbijan hoàng kim có giáp\nzata chí tôn\nflo seven \nnhiều ss",
-      "price": 200000,
-      "category": "mid",
-      "type": "vip",
+      "id": 1785143135286,
+      "code": "reg-09",
+      "name": "reg sines",
+      "info": "rank ta",
+      "description": "143g\ntlt 99\nut 100\n26t/14skin\nreg sines wave \nngộ xích diễm \ntttklk",
+      "price": 85000,
+      "category": "cheap",
+      "type": "reg",
       "status": "selling",
-      "img": "/files/6a65b5ff328e2239244081e2"
+      "img": "/files/6a671f5e4fdd33ee9932693a"
+    },
+    {
+      "id": 1785142943708,
+      "code": "reg-08",
+      "name": "reg flo + ss",
+      "info": "rank  đồng",
+      "description": "0 g\ntlt 0\nut 100\n10t/8skin\nreg flo hổ phách \nrương ss + s+hh + s+\ntttklk",
+      "price": 100000,
+      "category": "mid",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671e9f4fdd33ee99326937"
+    },
+    {
+      "id": 1785142821529,
+      "code": "reg-07",
+      "name": "reg flo + ss",
+      "info": "rank đồng",
+      "description": "0 g\ntlt 0\nut 100\nreg flo hổ phách \nrương ss + s+hh + s+\ntttklk",
+      "price": 100000,
+      "category": "mid",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671e254fdd33ee99326934"
+    },
+    {
+      "id": 1785142647038,
+      "code": "reg-07",
+      "name": "reg flo + aduin",
+      "info": "rank đồng",
+      "description": "0g\ntlt 0\nut 100\n16t/7skin \nreg flo hổ phách \nreg aduin bạch vệ chiến giáp",
+      "price": 115000,
+      "category": "mid",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671d764fdd33ee99326931"
+    },
+    {
+      "id": 1785142453304,
+      "code": "reg-05",
+      "name": "reg flo + veres",
+      "info": "rank đồng",
+      "description": "0g\ntlt 0\nut 100\n17t/5skin\nreg flo  hổ phách \nreg veres kimono",
+      "price": 115000,
+      "category": "mid",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671cb44fdd33ee9932692e"
+    },
+    {
+      "id": 1785142177022,
+      "code": "reg-04",
+      "name": "acc reg tulen + elsu",
+      "info": "rank đồng",
+      "description": "0g\ntlt 0\nut 100\n19t/9skin\nreg tulen tiêu dao \nreg elsu trấn thiên phi hổ",
+      "price": 80000,
+      "category": "cheap",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671ba04fdd33ee9932692b"
+    },
+    {
+      "id": 1785141997716,
+      "code": "reg-03",
+      "name": "richtor",
+      "info": "rank đồng",
+      "description": "27g\ntlt 92\nut 100\nreg richtor smr thần kiếm",
+      "price": 75000,
+      "category": "cheap",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671aed4fdd33ee99326928"
+    },
+    {
+      "id": 1785141846470,
+      "code": "reg-02",
+      "name": "mina",
+      "info": "rank đồng",
+      "description": "6g\ntlt50\nut100\nmina linh xà \nreg",
+      "price": 70,
+      "category": "cheap",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a671a564fdd33ee99326925"
+    },
+    {
+      "id": 1785141687029,
+      "code": "reg-01",
+      "name": "lili",
+      "info": "rank dồng",
+      "description": "0 game \ntlt 0\nut 100\n13t/4skin\nlili wave",
+      "price": 55000,
+      "category": "cheap",
+      "type": "reg",
+      "status": "selling",
+      "img": "/files/6a6719b64fdd33ee99326923"
     }
   ],
-  "activityLog": [],
+  "activityLog": [
+    {
+      "time": 1785143337848,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-10 (reg bijan). [Admin]"
+    },
+    {
+      "time": 1785143135286,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-09 (reg sines). [Admin]"
+    },
+    {
+      "time": 1785142943708,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-08 (reg flo + ss). [Admin]"
+    },
+    {
+      "time": 1785142821529,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-07 (reg flo + ss). [Admin]"
+    },
+    {
+      "time": 1785142647038,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-07 (reg flo + aduin). [Admin]"
+    },
+    {
+      "time": 1785142453304,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-05 (reg flo + veres). [Admin]"
+    },
+    {
+      "time": 1785142177022,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-04 (acc reg tulen + elsu). [Admin]"
+    },
+    {
+      "time": 1785141997716,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-03 (richtor). [Admin]"
+    },
+    {
+      "time": 1785141846470,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-02 (mina). [Admin]"
+    },
+    {
+      "time": 1785141692868,
+      "action": "Xóa tài khoản",
+      "detail": "Đã xóa acc 01 (qlen). [Admin]"
+    },
+    {
+      "time": 1785141691495,
+      "action": "Xóa tài khoản",
+      "detail": "Đã xóa acc 02 (billow). [Admin]"
+    },
+    {
+      "time": 1785141687029,
+      "action": "Thêm tài khoản mới",
+      "detail": "Đã thêm acc reg-01 (lili). [Admin]"
+    },
+    {
+      "time": 1785140392990,
+      "action": "Tạo sự kiện mới",
+      "detail": "Đã tạo sự kiện \"Đại tiệc trăng máu\"."
+    }
+  ],
   "deviceState": {
     "JH-DISC-FK17DU": {
       "discountUsed": false,
@@ -92,7 +254,12 @@
     "JH-DISC-Z5M8TK": {
       "discountUsed": false,
       "promoSpin": null,
-      "freeSpin": null,
+      "freeSpin": {
+        "day": "2026-07-27",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     },
     "JH-DISC-N0BHAC": {
@@ -159,18 +326,60 @@
     },
     "JH-DISC-4HJC8N": {
       "discountUsed": false,
-      "promoSpin": null,
-      "freeSpin": null,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
+      "freeSpin": {
+        "day": "2026-07-27",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     },
     "JH-DISC-QQ9UOT": {
       "discountUsed": false,
-      "promoSpin": null,
-      "freeSpin": null,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
+      "freeSpin": {
+        "day": "2026-07-27",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     }
   },
-  "events": [],
+  "events": [
+    {
+      "id": "ev_1785140392990",
+      "name": "Đại tiệc trăng máu",
+      "type": "uu_dai",
+      "startTime": "2026-07-27T15:20",
+      "endTime": "2026-07-27T15:40",
+      "banner": "/files/6a6714a74fdd33ee99326918",
+      "description": "Đại tiệc trăng máu chỉ diễn ra một lần trong năm nhớ đừng bỏ lỡ cơ hội săn acc nhé",
+      "status": "hien",
+      "spinPrice": 0,
+      "discountPercent": 10,
+      "rewards": [],
+      "requireQr": false,
+      "qrAmount": 0,
+      "qrNote": "",
+      "maxPlays": 1,
+      "closedNoticeText": "Sự kiện hiện đang tạm đóng, vui lòng quay lại sau.",
+      "rabbitSpeedMs": 800,
+      "rabbitHoles": 6,
+      "boxCount": 6,
+      "createdAt": 1785140392990,
+      "updatedAt": 1785140392990
+    }
+  ],
   "freeAccounts": [],
   "settings": {
     "adminTitle": "J-HUSH / HUY ĐỨC",
@@ -192,5 +401,8 @@
     "adminPasswordSalt": "dcd72d610e16ebe3c9f4b63c4448717c"
   },
   "collaborators": [],
-  "eventRequests": []
+  "eventRequests": [],
+  "customers": [],
+  "passwordRecoveryRequests": [],
+  "purchaseRequests": []
 }
