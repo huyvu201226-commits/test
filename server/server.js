@@ -76,6 +76,7 @@ const CUSTOMER_MAX_FAILED_ATTEMPTS = 5;
 const PAYMENT_REVIEW_WINDOW_MS = 5 * 60 * 1000;
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(path.dirname(DB_PATH))) fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 // ------------------------------------------------------------
 // Lớp lưu trữ: đọc toàn bộ DB vào bộ nhớ khi khởi động, mọi thay đổi
