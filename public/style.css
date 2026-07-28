@@ -431,6 +431,10 @@ body {
 
 /* Sự kiện tạm đóng / chưa tới ngày diễn ra: hiện mờ + thông báo hướng dẫn */
 .event-locked-card { opacity: 0.6; filter: grayscale(0.4); }
+/* Nút quay của Vòng Quay May Mắn (tab Ưu Đãi) / Quay Là Trúng hằng ngày khi bị Admin tạm khóa
+   (shopLocked hoặc allSpinLocked) — chỉ đổi giao diện nút, không đụng tới .wheel-circle để vòng
+   quay vẫn hiển thị bình thường, chỉ là không bấm quay được nữa. */
+.spin-locked-btn { opacity: 0.5; filter: grayscale(0.5); cursor: not-allowed; }
 
 /* Tab Giới Thiệu (Intro Dual Grid) */
 .intro-dual-grid {

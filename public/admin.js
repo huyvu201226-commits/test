@@ -631,6 +631,68 @@ function loadSettingsToForm() {
     document.getElementById('settingAudioFile').value = '';
     const qrFileInput = document.getElementById('settingQrFile');
     if (qrFileInput) qrFileInput.value = '';
+
+    // Nền website (màu / ảnh tùy chỉnh / mặc định)
+    const bgType = settings.bgType || 'mac_dinh';
+    const bgTypeInput = document.querySelector(`input[name="settingBgType"][value="${bgType}"]`);
+    if (bgTypeInput) bgTypeInput.checked = true;
+    document.getElementById('settingBgColor').value = settings.bgColor || '#17171a';
+    const bgPreview = document.getElementById('bgPreview');
+    if (bgPreview) {
+        bgPreview.src = settings.bgImageUrl ? resolveMediaSrc(settings.bgImageUrl, '') : '';
+        bgPreview.style.display = settings.bgImageUrl ? 'block' : 'none';
+    }
+    const bgFileInput = document.getElementById('settingBgFile');
+    if (bgFileInput) bgFileInput.value = '';
+    onBgTypeChange();
+
+    // Khóa Shop / Sự Kiện / Vòng Quay / Mã giảm giá 5%
+    document.getElementById('lockShopToggle').checked = !!settings.shopLocked;
+    document.getElementById('lockShopMsg').value = settings.shopLockedMessage || '';
+    document.getElementById('lockEventsToggle').checked = !!settings.allEventsLocked;
+    document.getElementById('lockEventsMsg').value = settings.allEventsLockedMessage || '';
+    document.getElementById('lockSpinToggle').checked = !!settings.allSpinLocked;
+    document.getElementById('lockSpinMsg').value = settings.allSpinLockedMessage || '';
+    document.getElementById('lockDiscountToggle').checked = !!settings.discount5Locked;
+    onLockToggleChange();
+}
+
+// Đổi kiểu nền website: ẩn/hiện ô chọn màu hoặc ô tải ảnh tương ứng
+function onBgTypeChange() {
+    const checked = document.querySelector('input[name="settingBgType"]:checked');
+    const type = checked ? checked.value : 'mac_dinh';
+    document.getElementById('bgColorBox').style.display = (type === 'mau') ? 'block' : 'none';
+    document.getElementById('bgImageBox').style.display = (type === 'anh') ? 'block' : 'none';
+}
+
+// Tô viền đỏ cho các khối khóa đang bật, giúp Admin nhìn ngay trạng thái hiện tại
+function onLockToggleChange() {
+    document.getElementById('lockRowShop').classList.toggle('is-active', document.getElementById('lockShopToggle').checked);
+    document.getElementById('lockRowEvents').classList.toggle('is-active', document.getElementById('lockEventsToggle').checked);
+    document.getElementById('lockRowSpin').classList.toggle('is-active', document.getElementById('lockSpinToggle').checked);
+}
+
+// Lưu trạng thái khóa Shop / Sự Kiện / Vòng Quay / Mã giảm giá 5% — tách riêng form để Admin
+// không phải bấm "Cập Nhật Cấu Hình" (form thông tin chung) mỗi lần chỉ muốn khóa/mở nhanh.
+async function saveLockSettings(event) {
+    event.preventDefault();
+    const payload = {
+        shopLocked: document.getElementById('lockShopToggle').checked,
+        shopLockedMessage: document.getElementById('lockShopMsg').value.trim(),
+        allEventsLocked: document.getElementById('lockEventsToggle').checked,
+        allEventsLockedMessage: document.getElementById('lockEventsMsg').value.trim(),
+        allSpinLocked: document.getElementById('lockSpinToggle').checked,
+        allSpinLockedMessage: document.getElementById('lockSpinMsg').value.trim(),
+        discount5Locked: document.getElementById('lockDiscountToggle').checked
+    };
+    try {
+        await updateSettingsApi(payload);
+        renderActivityLog();
+        loadSettingsToForm();
+        alert('Đã lưu trạng thái khóa!');
+    } catch (err) {
+        alert('Lỗi khi lưu trạng thái khóa: ' + err.message);
+    }
 }
 
 async function saveGlobalSettings(event) {
@@ -673,6 +735,13 @@ async function saveGlobalSettings(event) {
             const urlValue = document.getElementById('settingAudioUrl').value.trim();
             if (urlValue) payload.audioUrl = urlValue;
         }
+
+        const bgTypeChecked = document.querySelector('input[name="settingBgType"]:checked');
+        payload.bgType = bgTypeChecked ? bgTypeChecked.value : 'mac_dinh';
+        payload.bgColor = document.getElementById('settingBgColor').value;
+        const bgFileInput = document.getElementById('settingBgFile');
+        const bgFile = bgFileInput ? bgFileInput.files[0] : null;
+        if (bgFile) payload.bgImageUrl = await uploadFile(bgFile);
 
         await updateSettingsApi(payload);
         renderActivityLog();
@@ -1132,6 +1201,16 @@ function addRewardRow(reward) {
                 <input type="text" class="form-control reward-password" style="margin-bottom:0;" placeholder="Mật khẩu" value="${reward ? escapeHtml(reward.password || '') : ''}">
             </div>
         </div>
+        <div class="reward-color-row">
+            <div>
+                <label>Màu Ô (chỉ áp dụng cho Vòng Quay)</label>
+                <input type="color" class="reward-cell-color" value="${reward && reward.cellColor ? reward.cellColor : '#3b63e0'}">
+            </div>
+            <div>
+                <label>Màu Chữ Trong Ô</label>
+                <input type="color" class="reward-text-color" value="${reward && reward.textColor ? reward.textColor : '#ffffff'}">
+            </div>
+        </div>
     `;
     container.appendChild(row);
 }
@@ -1187,7 +1266,9 @@ async function saveEvent(event) {
         odds: parseFloat(row.querySelector('.reward-odds').value) || 0,
         quantity: parseInt(row.querySelector('.reward-qty').value, 10) || 0,
         account: row.querySelector('.reward-account').value.trim(),
-        password: row.querySelector('.reward-password').value.trim()
+        password: row.querySelector('.reward-password').value.trim(),
+        cellColor: row.querySelector('.reward-cell-color') ? row.querySelector('.reward-cell-color').value : '',
+        textColor: row.querySelector('.reward-text-color') ? row.querySelector('.reward-text-color').value : ''
     })).filter(r => r.name);
 
     const payload = {

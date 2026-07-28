@@ -297,6 +297,8 @@ async function markDiscountUsedApi() {
     return apiFetch('/api/discount/use', { method: 'POST', body: JSON.stringify({ deviceCode: getOrCreateDeviceCode() }) });
 }
 function isEligibleForDiscount(acc, discountUsed) {
+    const settings = getSettings();
+    if (settings && settings.discount5Locked) return false;
     return !!acc && acc.type !== 'reg' && !discountUsed;
 }
 

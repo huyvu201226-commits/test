@@ -26,6 +26,16 @@
     <!-- Lớp nền động giả lập iFrame/Mask -->
     <div class="default-mask"></div>
 
+    <!-- Khóa toàn bộ Shop (bảo trì) — Admin bật/tắt trong trang quản trị, hiện đè lên mọi thứ kể
+         cả màn chào, chặn toàn bộ tương tác mua/quay cho tới khi Admin mở lại. -->
+    <div class="modal-overlay mandatory" id="shopLockedOverlay" style="z-index: 2600;">
+        <div class="modal-card" style="text-align:center;">
+            <i class="fa-solid fa-lock" style="font-size:2.2rem; color:var(--gold); margin-bottom:12px;"></i>
+            <h3 style="margin-bottom:10px;">Shop Đang Tạm Đóng</h3>
+            <p id="shopLockedMsg" style="color: var(--text-muted); font-size:0.9rem;"></p>
+        </div>
+    </div>
+
     <!-- Màn hình chào mừng lần đầu truy cập (Kích hoạt âm thanh & Vào trang) -->
     <div class="welcome-overlay" id="welcomeOverlay">
         <div class="welcome-card animate-pop">
@@ -65,7 +75,7 @@
                     <h3>Mã Giảm Giá 5% Đơn Đầu Tiên</h3>
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin: 10px 0 15px;">Áp dụng giảm 5% cho <b>1 đơn bất kỳ</b>, dùng được <b>1 lần duy nhất / thiết bị</b>. Không áp dụng cho Acc Reg. Mã sẽ tự động được áp khi bạn mua acc.</p>
                     <div id="discountCodeDisplay" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-weight: bold; color: var(--gold); margin-bottom: 15px;">Đang kiểm tra thiết bị...</div>
-                    <button class="btn-buy" onclick="claimDiscountCode()">Nhận Mã Giảm Giá</button>
+                    <button class="btn-buy" id="claimDiscountBtn" onclick="claimDiscountCode()">Nhận Mã Giảm Giá</button>
                 </div>
                 <div class="promo-box hover-card">
                     <i class="fa-solid fa-dharmachakra icon-wheel-anim" style="font-size: 2.5rem; color: var(--accent-blue); margin-bottom: 12px;"></i>

@@ -74,6 +74,8 @@ const CUSTOMER_MAX_FAILED_ATTEMPTS = 5;
 // Yêu cầu mua acc / tham gia sự kiện: thời gian chờ Admin duyệt trước khi hiện nút "Chat Zalo
 // để được hỗ trợ" cho khách (không tự hủy yêu cầu, chỉ để khách biết cách liên hệ nếu chờ lâu).
 const PAYMENT_REVIEW_WINDOW_MS = 5 * 60 * 1000;
+// Bảng màu mặc định gán tuần tự cho từng ô vòng quay khi Admin không tự chọn màu riêng.
+const WHEEL_COLOR_PALETTE = ['#ef4444', '#14b8a6', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#06b6d4', '#a855f7', '#22c55e', '#f43f5e'];
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -322,6 +324,32 @@ function requireAccountManager(req, res, next) {
 function actorLabel(req) {
     return req.tokenRole === 'ctv' ? `CTV "${req.tokenUsername}"` : 'Admin';
 }
+// Chặn mọi hành động giao dịch của khách (mua acc, quay vòng quay ưu đãi/free, tham gia sự
+// kiện...) khi Admin đã bật "Khóa toàn bộ Shop" trong trang quản trị — không ảnh hưởng tới các
+// route requireAdmin/requireAccountManager (Admin/CTV vẫn thao tác quản trị bình thường).
+function blockIfShopLocked(req, res, next) {
+    if (db.settings && db.settings.shopLocked) {
+        return res.status(423).json({
+            error: db.settings.shopLockedMessage || 'Shop hiện đang tạm đóng cửa, vui lòng quay lại sau.'
+        });
+    }
+    next();
+}
+// Chặn riêng 2 vòng quay "gốc" của Shop (Vòng Quay May Mắn tháng ở tab Ưu Đãi — /api/spin/promo,
+// và Quay Là Trúng hằng ngày — /api/spin/free). 2 route này KHÔNG nằm trong hệ "Sự kiện" (mục 6)
+// nên trước đây không hề bị ảnh hưởng bởi allEventsLocked/allSpinLocked — chỉ bị khóa khi Admin
+// bật "Khóa toàn bộ Shop". Giờ cho "Khóa riêng Vòng Quay" (allSpinLocked) khóa luôn cả 2 route này,
+// vì với Admin/khách, đây đều là "vòng quay" của Shop, không phân biệt có thuộc mục Sự Kiện hay không.
+function blockIfSpinLocked(req, res, next) {
+    const s = db.settings || {};
+    if (s.shopLocked) {
+        return res.status(423).json({ error: s.shopLockedMessage || 'Shop hiện đang tạm đóng cửa, vui lòng quay lại sau.' });
+    }
+    if (s.allSpinLocked) {
+        return res.status(423).json({ error: s.allSpinLockedMessage || 'Vòng quay hiện đang tạm khóa, vui lòng quay lại sau.' });
+    }
+    next();
+}
 // Bắt buộc khách phải đăng nhập tài khoản (đăng ký nếu chưa có) trước khi mua acc hoặc tham
 // gia sự kiện có phí — gắn liền mọi yêu cầu thanh toán với đúng 1 tài khoản khách hàng.
 function requireCustomer(req, res, next) {
@@ -374,10 +402,32 @@ function parseVnDateTime(str) {
 //              chỉ có 2 trạng thái hidden/active vì bản chất là bảng thông báo, không phải trò chơi.
 //   'active' = hiển thị & chơi/áp dụng được bình thường
 // ------------------------------------------------------------
+// Khóa toàn cục (mục "Khóa Shop / Sự Kiện / Vòng Quay" trong trang quản trị):
+//   - settings.shopLocked      : khóa TOÀN BỘ shop (mọi sự kiện + mua acc + các vòng quay ưu đãi/free)
+//   - settings.allEventsLocked : khóa TOÀN BỘ sự kiện (mục 6) — Giảm Deal/Vòng Quay/Đập Thỏ/Đập Hộp
+//   - settings.allSpinLocked   : khóa RIÊNG các sự kiện loại "vòng quay" (type === 'vong_quay')
+// Cả 3 đều không xóa dữ liệu, chỉ tạm ẩn/khóa hiển thị — bật lại là hoạt động ngay như cũ.
+function isGloballyLocked(ev) {
+    const s = db.settings || {};
+    if (s.shopLocked) return true;
+    if (s.allEventsLocked) return true;
+    if (ev && ev.type === 'vong_quay' && s.allSpinLocked) return true;
+    return false;
+}
+// Thông báo hiển thị cho khách tương ứng với LÝ DO khóa toàn cục (ưu tiên khóa shop > khóa toàn
+// bộ sự kiện > khóa riêng vòng quay) — nếu Admin không nhập thì dùng câu mặc định.
+function globalLockNotice(ev) {
+    const s = db.settings || {};
+    if (s.shopLocked) return s.shopLockedMessage || 'Shop hiện đang tạm đóng cửa, vui lòng quay lại sau.';
+    if (s.allEventsLocked) return s.allEventsLockedMessage || 'Toàn bộ sự kiện hiện đang tạm khóa, vui lòng quay lại sau.';
+    if (ev && ev.type === 'vong_quay' && s.allSpinLocked) return s.allSpinLockedMessage || 'Vòng quay hiện đang tạm khóa, vui lòng quay lại sau.';
+    return null;
+}
 function eventDisplayState(ev) {
     if (ev.status === 'an') return 'hidden';
     const now = Date.now();
     if (ev.endTime && now > parseVnDateTime(ev.endTime).getTime()) return 'hidden';
+    if (isGloballyLocked(ev)) return 'locked';
     if (ev.status === 'tam_khoa') return 'locked';
     if (ev.startTime && now < parseVnDateTime(ev.startTime).getTime()) return 'locked';
     return 'active';
@@ -387,12 +437,17 @@ function isEventActive(ev) {
     return eventDisplayState(ev) === 'active';
 }
 function publicEvent(ev) {
+    const displayState = eventDisplayState(ev);
+    // Khi bị khóa do 1 trong 3 khóa toàn cục ở trên, ưu tiên hiện thông báo khóa toàn cục thay vì
+    // câu "tạm khóa" riêng của sự kiện, để khách hiểu đúng lý do (shop bảo trì / sự kiện tạm khóa...).
+    const globalNotice = displayState === 'locked' ? globalLockNotice(ev) : null;
     return {
         ...ev,
-        // Chỉ lộ ảnh/mô tả ảnh + số lượng còn lại ra ngoài — TUYỆT ĐỐI không gửi account/password
-        // của phần thưởng "acc free" cho khách khi chưa trúng thưởng.
-        rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, imageDesc: r.imageDesc, remaining: r.remaining })),
-        displayState: eventDisplayState(ev)
+        // Chỉ lộ ảnh/mô tả ảnh + số lượng còn lại + màu ô/chữ ra ngoài — TUYỆT ĐỐI không gửi
+        // account/password của phần thưởng "acc free" cho khách khi chưa trúng thưởng.
+        rewards: ev.rewards.map(r => ({ id: r.id, name: r.name, image: r.image, imageDesc: r.imageDesc, remaining: r.remaining, cellColor: r.cellColor, textColor: r.textColor })),
+        displayState,
+        closedNoticeText: globalNotice || ev.closedNoticeText
     };
 }
 
@@ -624,7 +679,7 @@ app.get('/api/device/:code/status', (req, res) => {
     res.json({ discountUsed: !!state.discountUsed, promoSpin, freeSpin, events });
 });
 
-app.post('/api/spin/promo', (req, res) => {
+app.post('/api/spin/promo', blockIfSpinLocked, (req, res) => {
     const { deviceCode } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const state = getDeviceState(deviceCode);
@@ -642,7 +697,7 @@ app.post('/api/spin/promo', (req, res) => {
     res.json({ alreadySpun: false, won });
 });
 
-app.post('/api/spin/free', (req, res) => {
+app.post('/api/spin/free', blockIfSpinLocked, (req, res) => {
     const { deviceCode } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const state = getDeviceState(deviceCode);
@@ -676,9 +731,14 @@ app.post('/api/spin/free', (req, res) => {
     res.json({ alreadySpun: false, won, prize });
 });
 
-app.post('/api/discount/use', (req, res) => {
+app.post('/api/discount/use', blockIfShopLocked, (req, res) => {
     const { deviceCode } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
+    // Chặn luôn ở server (không chỉ ẩn ở giao diện) khi Admin đã khóa mã giảm 5% đơn đầu — tránh
+    // trường hợp khách gọi thẳng API mà bỏ qua kiểm tra phía client.
+    if (db.settings && db.settings.discount5Locked) {
+        return res.status(423).json({ error: 'Ưu đãi giảm 5% đơn đầu hiện đang tạm khóa, vui lòng quay lại sau.' });
+    }
     const state = getDeviceState(deviceCode);
     state.discountUsed = true;
     persist();
@@ -689,7 +749,7 @@ app.post('/api/discount/use', (req, res) => {
 // logic: bốc phần thưởng theo trọng số odds, chỉ khác giao diện hiển thị ở phía client).
 // Giai đoạn 2: thay cơ chế "reset theo ngày" bằng khóa QR (nếu bật) + giới hạn TỔNG số lượt
 // chơi trên toàn bộ thời gian sự kiện.
-app.post('/api/events/:id/spin', (req, res) => {
+app.post('/api/events/:id/spin', blockIfShopLocked, (req, res) => {
     const { deviceCode } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const ev = db.events.find(e => e.id === req.params.id);
@@ -762,7 +822,7 @@ app.post('/api/events/:id/spin', (req, res) => {
 // Bắt buộc đã đăng nhập tài khoản khách hàng (requireCustomer) để gắn đúng yêu cầu với đúng
 // người mua — payerName/payerBankAccount là ô dự phòng cho trường hợp khách quên ghi nội dung
 // chuyển khoản, giúp Admin đối chiếu với sao kê ngân hàng để duyệt chính xác.
-app.post('/api/events/:id/request-access', requireCustomer, (req, res) => {
+app.post('/api/events/:id/request-access', requireCustomer, blockIfShopLocked, (req, res) => {
     const { deviceCode, note, payerName, payerBankAccount } = req.body || {};
     if (!deviceCode) return res.status(400).json({ error: 'Thiếu deviceCode' });
     const ev = db.events.find(e => e.id === req.params.id);
@@ -808,7 +868,7 @@ app.post('/api/events/:id/request-access', requireCustomer, (req, res) => {
 // đã chuyển (phòng khi quên ghi nội dung CK) — Admin đối chiếu ngân hàng đã nhận tiền rồi duyệt
 // ngay trong trang quản trị. Trong lúc chờ, phía khách đếm ngược 5 phút rồi hiện nút chat Zalo
 // nếu Admin chưa kịp duyệt.
-app.post('/api/purchase-requests', requireCustomer, (req, res) => {
+app.post('/api/purchase-requests', requireCustomer, blockIfShopLocked, (req, res) => {
     ensurePurchaseRequestsInitialized();
     const { accountId, payerName, payerBankAccount, note, phoneNumber } = req.body || {};
     const id = Number(accountId);
@@ -1422,6 +1482,14 @@ app.get('/api/admin/media-check', requireAdmin, (req, res) => {
 });
 
 // --- Cấu hình hệ thống ---
+// Route CÔNG KHAI (không cần đăng nhập) — dùng để đồng bộ định kỳ phía khách (script.js gọi mỗi
+// 15s để cập nhật nhạc nền + trạng thái khóa Shop/Vòng Quay/Mã giảm giá real-time, không cần F5).
+// TRƯỚC ĐÂY route này KHÔNG TỒN TẠI (chỉ có PUT), khiến mọi lần đồng bộ định kỳ của khách đều lỗi
+// 404 âm thầm — khách đang mở trang sẽ không bao giờ thấy trạng thái khóa mới cho tới khi tải lại.
+app.get('/api/settings', (req, res) => {
+    res.json(publicSettings(db.settings));
+});
+
 app.put('/api/settings', requireAdmin, (req, res) => {
     const { adminPasswordHash, adminPasswordSalt, ...safeBody } = req.body || {};
     db.settings = { ...db.settings, ...safeBody, socialLinks: { ...db.settings.socialLinks, ...(safeBody.socialLinks || {}) } };
@@ -1450,7 +1518,11 @@ app.post('/api/events', requireAdmin, (req, res) => {
         // Tài khoản/mật khẩu của quà acc free — chỉ trả về cho khách khi trúng (xem /spin), không
         // bao giờ lộ qua publicEvent()
         account: r.account || '',
-        password: r.password || ''
+        password: r.password || '',
+        // Màu ô + màu chữ riêng cho ô vòng quay (chỉ áp dụng khi type === 'vong_quay') — nếu Admin
+        // không tự chọn, gán tuần tự theo bảng màu mặc định để mỗi ô luôn khác màu ô kế bên.
+        cellColor: r.cellColor || WHEEL_COLOR_PALETTE[i % WHEEL_COLOR_PALETTE.length],
+        textColor: r.textColor || '#ffffff'
     }));
     const ev = normalizeEvent({
         ...req.body,
@@ -1487,7 +1559,9 @@ app.put('/api/events/:id', requireAdmin, (req, res) => {
                 quantity,
                 remaining: old ? Math.min(old.remaining, quantity) : quantity,
                 account: r.account || '',
-                password: r.password || ''
+                password: r.password || '',
+                cellColor: r.cellColor || (old && old.cellColor) || WHEEL_COLOR_PALETTE[i % WHEEL_COLOR_PALETTE.length],
+                textColor: r.textColor || (old && old.textColor) || '#ffffff'
             };
         });
     }

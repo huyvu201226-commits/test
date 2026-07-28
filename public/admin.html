@@ -33,6 +33,16 @@
         .btn-reset-media { background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text-main); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
         .subsection-title { font-size: 0.95rem; color: var(--gold); margin: 20px 0 10px; border-top: 1px solid var(--card-border); padding-top: 18px; }
         .subsection-title:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+        .lock-toggle-row { border: 1px solid var(--card-border); border-radius: 8px; padding: 14px; margin-bottom: 14px; background: rgba(0,0,0,0.15); }
+        .lock-toggle-row.is-active { border-color: #ef4444; background: rgba(239,68,68,0.08); }
+        .switch-row { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.9rem; margin-bottom: 10px; }
+        .switch-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #ef4444; cursor: pointer; flex-shrink: 0; }
+        .lock-toggle-row textarea { margin-bottom: 0; }
+        .bg-type-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+        .bg-type-row label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+        .reward-color-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .reward-color-row label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; }
+        .reward-color-row input[type="color"] { width: 100%; height: 38px; padding: 2px; border-radius: 6px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); cursor: pointer; }
         .log-empty { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 15px; }
         .log-action { font-weight: bold; color: var(--gold); }
         .form-msg { font-size: 0.82rem; margin: -6px 0 12px; min-height: 1em; }
@@ -537,6 +547,30 @@
             <button class="btn-sm btn-delete" style="margin-top: 12px;" onclick="handleClearLog()">Xóa Toàn Bộ Nhật Ký</button>
         </div>
 
+        <!-- Phần 2b: Khóa Shop / Sự Kiện / Vòng Quay / Mã Giảm Giá -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-lock" style="color: var(--gold);"></i> Khóa Shop / Sự Kiện / Vòng Quay</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Tạm khóa nhanh khi cần bảo trì hoặc tạm dừng — không xóa dữ liệu, bật lại là hoạt động ngay như cũ. Áp dụng ngay lập tức cho mọi khách đang mở trang.</p>
+            <form id="lockForm" onsubmit="saveLockSettings(event)">
+                <div class="lock-toggle-row" id="lockRowShop">
+                    <label class="switch-row"><input type="checkbox" id="lockShopToggle" onchange="onLockToggleChange()"><span><b>Khóa toàn bộ Shop</b> — chặn xem/mua acc và mọi sự kiện, vòng quay</span></label>
+                    <textarea id="lockShopMsg" class="form-control" rows="2" maxlength="200" placeholder="Thông báo hiển thị cho khách. VD: Shop đang bảo trì, quay lại sau 30 phút."></textarea>
+                </div>
+                <div class="lock-toggle-row" id="lockRowEvents">
+                    <label class="switch-row"><input type="checkbox" id="lockEventsToggle" onchange="onLockToggleChange()"><span><b>Khóa toàn bộ Sự Kiện</b> — Giảm Deal / Vòng Quay / Đập Thỏ / Đập Hộp</span></label>
+                    <textarea id="lockEventsMsg" class="form-control" rows="2" maxlength="200" placeholder="Thông báo hiển thị khi sự kiện bị khóa."></textarea>
+                </div>
+                <div class="lock-toggle-row" id="lockRowSpin">
+                    <label class="switch-row"><input type="checkbox" id="lockSpinToggle" onchange="onLockToggleChange()"><span><b>Khóa riêng Vòng Quay</b> — các sự kiện loại khác vẫn hoạt động bình thường</span></label>
+                    <textarea id="lockSpinMsg" class="form-control" rows="2" maxlength="200" placeholder="Thông báo hiển thị khi vòng quay bị khóa."></textarea>
+                </div>
+                <div class="lock-toggle-row" id="lockRowDiscount">
+                    <label class="switch-row"><input type="checkbox" id="lockDiscountToggle"><span><b>Khóa mã giảm giá 5% đơn đầu</b> — khách sẽ không còn được áp mã 5%/thiết bị</span></label>
+                </div>
+                <button type="submit" class="btn-submit" style="width: auto; padding: 10px 25px;">Lưu Trạng Thái Khóa</button>
+            </form>
+        </div>
+
         <!-- Phần 3: Cài Đặt Hệ Thống Thông Tin Chung, Logo, Avatar & Âm Thanh -->
         <div class="admin-section">
             <h3><i class="fa-solid fa-gear" style="color: var(--gold);"></i> Cấu Hình Giao Diện & Âm Thanh Hệ Thống</h3>
@@ -596,6 +630,26 @@
                 </div>
                 <button type="button" class="btn-reset-media" onclick="resetMediaField('qrImageUrl')">Bỏ ảnh QR đã tải (dùng lại QR tự động)</button>
                 <p class="field-hint">Khi khách bấm mua acc, hệ thống vẫn tự động ghi rõ nội dung chuyển khoản (mã acc) và số tiền cần thanh toán bên dưới ảnh QR này.</p>
+
+                <div class="subsection-title">Nền Website (Background)</div>
+                <div class="bg-type-row">
+                    <label><input type="radio" name="settingBgType" value="mac_dinh" onchange="onBgTypeChange()"> Mặc định</label>
+                    <label><input type="radio" name="settingBgType" value="mau" onchange="onBgTypeChange()"> Chọn màu yêu thích</label>
+                    <label><input type="radio" name="settingBgType" value="anh" onchange="onBgTypeChange()"> Ảnh tùy chỉnh</label>
+                </div>
+                <div id="bgColorBox" style="display:none;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted);">Chọn Màu Nền</label>
+                    <input type="color" id="settingBgColor" class="form-control" style="height:44px; padding:4px; cursor:pointer;" value="#17171a">
+                </div>
+                <div id="bgImageBox" style="display:none;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted);">Tải Ảnh Nền Từ Thiết Bị</label>
+                    <div class="upload-row">
+                        <input type="file" id="settingBgFile" class="form-control" accept="image/*" style="margin-bottom:0;">
+                        <img id="bgPreview" class="preview-avatar" style="border-radius: 6px;" alt="Xem trước ảnh nền">
+                    </div>
+                    <p class="field-hint">Ảnh sẽ tự phủ kín toàn bộ nền trang, giữ nguyên tỉ lệ (không méo ảnh).</p>
+                    <button type="button" class="btn-reset-media" onclick="resetMediaField('bgImageUrl')">Bỏ ảnh nền đã tải (dùng lại nền mặc định)</button>
+                </div>
 
                 <div class="subsection-title">Logo Shop &amp; Ảnh Đại Diện Admin</div>
                 <label style="font-size: 0.85rem; color: var(--text-muted);">Logo Shop (hiển thị ở thanh menu &amp; màn chào)</label>

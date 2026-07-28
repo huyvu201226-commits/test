@@ -61,11 +61,17 @@ function startMusicSync() {
     setInterval(async () => {
         try {
             const settings = await apiFetch('/api/settings');
-            const newAudioUrl = settings && settings.audioUrl;
-            if (newAudioUrl !== _settingsCache.audioUrl) {
-                _settingsCache = { ..._settingsCache, ...settings };
-                applyAudioSource(newAudioUrl);
-            }
+            if (!settings) return;
+            const newAudioUrl = settings.audioUrl;
+            const audioChanged = newAudioUrl !== _settingsCache.audioUrl;
+            // Merge TOÀN BỘ settings mỗi lần đồng bộ (không chỉ audioUrl/shopLocked như trước) — để
+            // các khóa mới (allSpinLocked, allEventsLocked, discount5Locked...) cũng được cập nhật
+            // real-time cho khách đang mở sẵn trang, không cần họ tự tải lại.
+            _settingsCache = { ..._settingsCache, ...settings };
+            if (audioChanged) applyAudioSource(newAudioUrl);
+            applyShopLockedOverlay(_settingsCache);
+            applySpinLockedUI(_settingsCache);
+            checkDeviceDiscountCode();
         } catch (err) {
             console.log('Không thể đồng bộ nhạc nền mới nhất:', err);
         }
@@ -113,6 +119,72 @@ function loadSettingsToClient() {
     if (audio && audioSrc) audio.src = audioSrc;
 
     applySocialLinks(settings.socialLinks || {});
+    applyShopLockedOverlay(settings);
+    applySpinLockedUI(settings);
+    applySiteBackground(settings);
+}
+
+// Hiện/ẩn overlay "Shop đang tạm đóng" theo settings.shopLocked — đè lên toàn bộ trang, kể cả
+// màn chào, khách không thao tác được gì cho tới khi Admin mở khóa lại.
+function applyShopLockedOverlay(settings) {
+    const overlay = document.getElementById('shopLockedOverlay');
+    if (!overlay) return;
+    if (settings.shopLocked) {
+        const msgEl = document.getElementById('shopLockedMsg');
+        if (msgEl) msgEl.textContent = settings.shopLockedMessage || 'Shop hiện đang tạm đóng cửa, vui lòng quay lại sau.';
+        overlay.classList.add('active');
+    } else {
+        overlay.classList.remove('active');
+    }
+}
+
+// Khóa/mở 2 vòng quay "gốc" của Shop (Vòng Quay May Mắn tháng — tab Ưu Đãi, và Quay Là Trúng
+// hằng ngày) theo settings.shopLocked HOẶC settings.allSpinLocked — trước đây 2 vòng quay này
+// không có bất kỳ giao diện khóa nào (chỉ server chặn ngầm), khiến nút quay vẫn bấm được bình
+// thường và chỉ báo lỗi sau khi bấm. Giờ làm mờ nút + hiện đúng thông báo Admin đã nhập ngay khi
+// đang khóa, không cần khách phải bấm thử mới biết.
+function applySpinLockedUI(settings) {
+    const locked = !!(settings.shopLocked || settings.allSpinLocked);
+    const notice = settings.shopLocked
+        ? (settings.shopLockedMessage || 'Shop hiện đang tạm đóng cửa, vui lòng quay lại sau.')
+        : (settings.allSpinLockedMessage || 'Vòng quay hiện đang tạm khóa, vui lòng quay lại sau.');
+
+    const promoBtn = document.getElementById('promoSpinBtn');
+    const promoStatus = document.getElementById('promoWheelStatus');
+    if (promoBtn) {
+        promoBtn.disabled = locked || _deviceStatus.promoSpin.spun;
+        promoBtn.classList.toggle('spin-locked-btn', locked);
+    }
+    if (promoStatus && locked) promoStatus.textContent = notice;
+    else if (promoStatus && !locked) renderPromoWheelStatus();
+
+    const freeBtn = document.getElementById('freeSpinBtn');
+    const freeStatus = document.getElementById('freeSpinStatus');
+    if (freeBtn) {
+        freeBtn.disabled = locked || _deviceStatus.freeSpin.spun;
+        freeBtn.classList.toggle('spin-locked-btn', locked);
+    }
+    if (freeStatus && locked) freeStatus.textContent = notice;
+    else if (freeStatus && !locked) renderFreeSpinStatus();
+}
+
+// Áp dụng nền website tùy chỉnh (màu yêu thích hoặc ảnh tải từ máy) — nếu Admin để "mặc định"
+// thì bỏ style inline, trả về đúng màu nền gốc theo giao diện Sáng/Tối của theme.
+function applySiteBackground(settings) {
+    const type = settings.bgType || 'mac_dinh';
+    if (type === 'mau' && settings.bgColor) {
+        document.body.style.background = settings.bgColor;
+    } else if (type === 'anh' && settings.bgImageUrl) {
+        const url = resolveMediaSrc(settings.bgImageUrl, '');
+        document.body.style.backgroundImage = `url("${url}")`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat = 'no-repeat';
+    } else {
+        document.body.style.background = '';
+        document.body.style.backgroundImage = '';
+    }
 }
 
 // Cập nhật các nút liên kết mạng xã hội theo cấu hình admin
@@ -272,17 +344,40 @@ function seekAudio(event) {
     audio.currentTime = (clickX / rect.width) * audio.duration;
 }
 
-// Xử lý hiển thị mã giảm giá thiết bị: mã chỉ dùng được 1 lần / thiết bị, không áp cho acc Reg
+// Xử lý hiển thị mã giảm giá thiết bị: mã chỉ dùng được 1 lần / thiết bị, không áp cho acc Reg.
+// Trước đây thẻ này KHÔNG hề đọc settings.discount5Locked — dù Admin đã khóa mã giảm 5%, khách
+// vẫn thấy "Còn hiệu lực giảm 5%" và bấm "Nhận Mã" bình thường (chỉ là mã đó thực ra không còn
+// được áp ở isEligibleForDiscount() nữa, gây hiểu lầm). Giờ đọc đúng cờ khóa để hiện thông báo và
+// khóa luôn nút bấm.
 function checkDeviceDiscountCode() {
     const deviceCode = getOrCreateDeviceCode();
     const display = document.getElementById('discountCodeDisplay');
+    const btn = document.getElementById('claimDiscountBtn');
     if (!display) return;
-    display.textContent = _deviceStatus.discountUsed
-        ? `Mã định danh: ${deviceCode} (Đã sử dụng ưu đãi 5%)`
-        : `Mã định danh: ${deviceCode} (Còn hiệu lực giảm 5%, không áp dụng cho Acc Reg)`;
+
+    const settings = getSettings();
+    const locked = !!(settings && settings.discount5Locked);
+
+    if (locked) {
+        display.textContent = 'Ưu đãi giảm 5% đơn đầu hiện đang tạm khóa, vui lòng quay lại sau.';
+    } else {
+        display.textContent = _deviceStatus.discountUsed
+            ? `Mã định danh: ${deviceCode} (Đã sử dụng ưu đãi 5%)`
+            : `Mã định danh: ${deviceCode} (Còn hiệu lực giảm 5%, không áp dụng cho Acc Reg)`;
+    }
+    if (btn) {
+        btn.disabled = locked;
+        btn.classList.toggle('spin-locked-btn', locked);
+    }
 }
 
 function claimDiscountCode() {
+    const settings = getSettings();
+    if (settings && settings.discount5Locked) {
+        alert('Ưu đãi giảm 5% đơn đầu hiện đang tạm khóa, vui lòng quay lại sau.');
+        checkDeviceDiscountCode();
+        return;
+    }
     const code = getOrCreateDeviceCode();
     navigator.clipboard.writeText(code);
     if (_deviceStatus.discountUsed) {
@@ -318,6 +413,8 @@ function renderPromoWheelStatus() {
 async function spinWheel() {
     if (isSpinning) return;
     if (_deviceStatus.promoSpin.spun) { renderPromoWheelStatus(); return; }
+    const settings = getSettings();
+    if (settings.shopLocked || settings.allSpinLocked) { applySpinLockedUI(settings); return; }
 
     isSpinning = true;
     const btn = document.getElementById('promoSpinBtn');
@@ -395,6 +492,8 @@ function showFreeAccPrize(prize) {
 async function spinFreeWheel() {
     if (isFreeSpinning) return;
     if (_deviceStatus.freeSpin.spun) { renderFreeSpinStatus(); return; }
+    const settings = getSettings();
+    if (settings.shopLocked || settings.allSpinLocked) { applySpinLockedUI(settings); return; }
 
     isFreeSpinning = true;
     const btn = document.getElementById('freeSpinBtn');
@@ -565,8 +664,18 @@ function renderEventCardShell(ev) {
     }
 
     if (ev.type === 'vong_quay') {
-        const sliceClasses = ['slice-1', 'slice-2', 'slice-3', 'slice-4', 'slice-5', 'slice-6'];
-        const wheelSlices = ev.rewards.slice(0, 6).map((r, i) => `<div class="wheel-slice ${sliceClasses[i % 6]}"><span>${escapeHtml((r.name || '').slice(0, 10))}</span></div>`).join('');
+        // Số ô = đúng số phần thưởng Admin đã cấu hình (không còn giới hạn cứng 6 ô như trước),
+        // giới hạn tối đa 12 ô để vòng quay vẫn hiển thị rõ ràng, dễ đọc trên màn hình nhỏ.
+        const rewardsForWheel = ev.rewards.slice(0, 12);
+        const sliceCount = Math.max(rewardsForWheel.length, 1);
+        const sliceAngle = 360 / sliceCount;
+        const skewDeg = 90 - sliceAngle;
+        const wheelSlices = rewardsForWheel.map((r, i) => {
+            const cellColor = r.cellColor || '#3b63e0';
+            const textColor = r.textColor || '#ffffff';
+            const rotateDeg = (i * sliceAngle).toFixed(3);
+            return `<div class="wheel-slice" style="background:${cellColor}; color:${textColor}; transform: rotate(${rotateDeg}deg) skewY(${(-skewDeg).toFixed(3)}deg);"><span>${escapeHtml((r.name || '').slice(0, 10))}</span></div>`;
+        }).join('');
         return `<div class="hover-card promo-box" style="margin-top:20px;">
             ${header}
             <div class="wheel-container">

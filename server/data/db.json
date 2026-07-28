@@ -121,83 +121,7 @@
       "img": "/files/6a6719b64fdd33ee99326923"
     }
   ],
-  "activityLog": [
-    {
-      "time": 1785216220961,
-      "action": "Yêu cầu mua acc",
-      "detail": "Khách \"huyduc\" gửi yêu cầu mua acc reg-10 (reg bijan)."
-    },
-    {
-      "time": 1785216190015,
-      "action": "Khách đăng ký tài khoản",
-      "detail": "Tài khoản khách hàng mới: \"huyduc\"."
-    },
-    {
-      "time": 1785143337848,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-10 (reg bijan). [Admin]"
-    },
-    {
-      "time": 1785143135286,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-09 (reg sines). [Admin]"
-    },
-    {
-      "time": 1785142943708,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-08 (reg flo + ss). [Admin]"
-    },
-    {
-      "time": 1785142821529,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-07 (reg flo + ss). [Admin]"
-    },
-    {
-      "time": 1785142647038,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-07 (reg flo + aduin). [Admin]"
-    },
-    {
-      "time": 1785142453304,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-05 (reg flo + veres). [Admin]"
-    },
-    {
-      "time": 1785142177022,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-04 (acc reg tulen + elsu). [Admin]"
-    },
-    {
-      "time": 1785141997716,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-03 (richtor). [Admin]"
-    },
-    {
-      "time": 1785141846470,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-02 (mina). [Admin]"
-    },
-    {
-      "time": 1785141692868,
-      "action": "Xóa tài khoản",
-      "detail": "Đã xóa acc 01 (qlen). [Admin]"
-    },
-    {
-      "time": 1785141691495,
-      "action": "Xóa tài khoản",
-      "detail": "Đã xóa acc 02 (billow). [Admin]"
-    },
-    {
-      "time": 1785141687029,
-      "action": "Thêm tài khoản mới",
-      "detail": "Đã thêm acc reg-01 (lili). [Admin]"
-    },
-    {
-      "time": 1785140392990,
-      "action": "Tạo sự kiện mới",
-      "detail": "Đã tạo sự kiện \"Đại tiệc trăng máu\"."
-    }
-  ],
+  "activityLog": [],
   "deviceState": {
     "JH-DISC-FK17DU": {
       "discountUsed": false,
@@ -247,7 +171,12 @@
         "spun": true,
         "won": false
       },
-      "freeSpin": null,
+      "freeSpin": {
+        "day": "2026-07-28",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
       "events": {}
     },
     "JH-DISC-J5V9Y0": {
@@ -388,31 +317,7 @@
       "events": {}
     }
   },
-  "events": [
-    {
-      "id": "ev_1785140392990",
-      "name": "Đại tiệc trăng máu",
-      "type": "uu_dai",
-      "startTime": "2026-07-27T15:20",
-      "endTime": "2026-07-27T15:40",
-      "banner": "/files/6a6714a74fdd33ee99326918",
-      "description": "Đại tiệc trăng máu chỉ diễn ra một lần trong năm nhớ đừng bỏ lỡ cơ hội săn acc nhé",
-      "status": "hien",
-      "spinPrice": 0,
-      "discountPercent": 10,
-      "rewards": [],
-      "requireQr": false,
-      "qrAmount": 0,
-      "qrNote": "",
-      "maxPlays": 1,
-      "closedNoticeText": "Sự kiện hiện đang tạm đóng, vui lòng quay lại sau.",
-      "rabbitSpeedMs": 800,
-      "rabbitHoles": 6,
-      "boxCount": 6,
-      "createdAt": 1785140392990,
-      "updatedAt": 1785140392990
-    }
-  ],
+  "events": [],
   "freeAccounts": [],
   "settings": {
     "adminTitle": "J-HUSH / HUY ĐỨC",
@@ -420,7 +325,7 @@
     "bankName": "BIDV",
     "bankAcc": "8853340606",
     "bankOwner": "VU HUY DUC",
-    "audioUrl": "/files/6a6667352d4aab962f5e00ce",
+    "audioUrl": "/files/6a68564b4d41ed193ac882ec",
     "logoUrl": "/files/6a6667352d4aab962f5e00ca",
     "avatarUrl": "/files/6a6667352d4aab962f5e00cc",
     "qrImageUrl": "/files/6a65ad614442ec4a699625b5",
@@ -432,7 +337,23 @@
     },
     "adminPasswordHash": "ed7ccb2ea51e5b1b97f9c34db98aea5fee841b117e6d6935a18fdce367e88dae",
     "adminPasswordSalt": "dcd72d610e16ebe3c9f4b63c4448717c",
-    "customerSecretKey": "3bbe30aa27922f622e70405263dd891f4f0872f7e39f2cc293283ed8a19c0813"
+    "customerSecretKey": "3bbe30aa27922f622e70405263dd891f4f0872f7e39f2cc293283ed8a19c0813",
+    "shopLocked": false,
+    "shopLockedMessage": "",
+    "allEventsLocked": true,
+    "allEventsLockedMessage": "Hiện không khả dụng",
+    "allSpinLocked": true,
+    "allSpinLockedMessage": "Hiện không khả dụng",
+    "discount5Locked": true,
+    "siteTitle": "Shop J_HUSH - Web Kết Nối Chính Thức Bởi Admin HUIDUC",
+    "siteDescription": "Shop J_HUSH - Web kết nối chính thức bởi Admin HUIDUC.",
+    "siteName": "",
+    "promoSpinDescription": "",
+    "promoSpinRate": 0.1,
+    "freeSpinDescription": "",
+    "freeSpinRate": 0.1,
+    "bgType": "mac_dinh",
+    "bgColor": "#8d8dc4"
   },
   "collaborators": [],
   "eventRequests": [],
@@ -448,7 +369,7 @@
       "lockedAt": null,
       "lockReason": null,
       "createdAt": 1785216190015,
-      "updatedAt": 1785216190015
+      "updatedAt": 1785224587037
     }
   ],
   "passwordRecoveryRequests": [],
@@ -464,10 +385,11 @@
       "payerBankAccount": "",
       "phoneNumber": "",
       "note": "",
-      "status": "pending",
+      "status": "rejected",
       "createdAt": 1785216220961,
       "deadlineMs": 1785216520961,
-      "resolvedAt": null
+      "resolvedAt": 1785222403670,
+      "rejectReason": "chưa nhận được giao dịch "
     }
   ]
 }
