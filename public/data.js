@@ -36,6 +36,25 @@ const EVENT_REQUEST_STATUS_LABELS = {
     rejected: { text: 'Đã từ chối', badge: 'badge-hacked' }
 };
 
+// Nhãn trạng thái yêu cầu mua acc
+const PURCHASE_REQUEST_STATUS_LABELS = {
+    pending: { text: 'Chờ duyệt', badge: 'badge-sold' },
+    approved: { text: 'Đã duyệt', badge: 'badge-selling' },
+    rejected: { text: 'Đã từ chối', badge: 'badge-hacked' }
+};
+
+// Nhãn trạng thái tài khoản khách hàng
+const CUSTOMER_STATUS_LABELS = {
+    active: { text: 'Hoạt động', badge: 'badge-selling' },
+    locked: { text: 'Đã khóa', badge: 'badge-hacked' }
+};
+
+// Nhãn trạng thái yêu cầu khôi phục mật khẩu
+const RECOVERY_REQUEST_STATUS_LABELS = {
+    pending: { text: 'Chờ xử lý', badge: 'badge-sold' },
+    resolved: { text: 'Đã xử lý', badge: 'badge-selling' }
+};
+
 // ------------------------------------------------------------
 // Bộ nhớ đệm trong phiên trang — nạp 1 lần lúc tải trang (initClientData / initAdminData),
 // các hàm ghi (create/update/delete...) tự cập nhật lại cache sau khi máy chủ xác nhận.
@@ -46,6 +65,9 @@ let _settingsCache = {};
 let _eventsCache = [];
 let _eventRequestsCache = [];
 let _activityLogCache = [];
+let _purchaseRequestsCache = [];
+let _customersCache = [];
+let _passwordRecoveryRequestsCache = [];
 
 function getAccounts() { return _accountsCache; }
 function getFreeAccounts() { return _freeAccountsCache; }
@@ -53,6 +75,9 @@ function getSettings() { return _settingsCache; }
 function getEvents() { return _eventsCache; }
 function getEventRequests() { return _eventRequestsCache; }
 function getActivityLog() { return _activityLogCache; }
+function getPurchaseRequestsAdmin() { return _purchaseRequestsCache; }
+function getCustomers() { return _customersCache; }
+function getPasswordRecoveryRequests() { return _passwordRecoveryRequestsCache; }
 
 // ------------------------------------------------------------
 // Gọi API dùng chung — tự đính token quản trị (nếu có) và tự báo khi phiên hết hạn.
@@ -64,20 +89,47 @@ function setAdminToken(token) {
 }
 function isAdminLoggedIn() { return !!getAdminToken(); }
 
+// Tài khoản khách hàng (đăng ký/đăng nhập bắt buộc trước khi mua acc / tham gia sự kiện có
+// phí) — lưu ở localStorage (không phải sessionStorage) để khách không phải đăng nhập lại
+// mỗi khi mở tab mới, khác với phiên Admin chỉ tồn tại trong 1 tab.
+function getCustomerToken() { return localStorage.getItem('jh_customer_token'); }
+function setCustomerToken(token) {
+    if (token) localStorage.setItem('jh_customer_token', token);
+    else localStorage.removeItem('jh_customer_token');
+}
+function getCustomerUsername() { return localStorage.getItem('jh_customer_username') || ''; }
+function setCustomerUsername(name) {
+    if (name) localStorage.setItem('jh_customer_username', name);
+    else localStorage.removeItem('jh_customer_username');
+}
+function isCustomerLoggedIn() { return !!getCustomerToken(); }
+
 async function apiFetch(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    const token = getAdminToken();
+    // Ưu tiên token Admin (trang quản trị); nếu không có thì dùng token khách hàng (trang Shop) —
+    // 2 trang không bao giờ cùng có cả 2 loại token nên không xung đột nhau.
+    const adminToken = getAdminToken();
+    const customerToken = getCustomerToken();
+    const token = adminToken || customerToken;
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
 
-    if (res.status === 401 && path !== '/api/admin/login') {
-        setAdminToken(null);
-        const loginBox = document.getElementById('adminLoginBox');
-        if (loginBox) {
-            loginBox.style.display = 'flex';
-            const msg = document.getElementById('loginMsg');
-            if (msg) msg.textContent = 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.';
+    if (res.status === 401 && path !== '/api/admin/login' && path !== '/api/customer/login' && path !== '/api/customer/register') {
+        if (adminToken) {
+            setAdminToken(null);
+            const loginBox = document.getElementById('adminLoginBox');
+            if (loginBox) {
+                loginBox.style.display = 'flex';
+                const msg = document.getElementById('loginMsg');
+                if (msg) msg.textContent = 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.';
+            }
+        } else if (customerToken) {
+            // Phiên khách hết hạn hoặc tài khoản vừa bị khóa — dọn token cũ, để script.js (nếu có
+            // định nghĩa onCustomerSessionExpired) tự cập nhật lại giao diện đăng nhập.
+            setCustomerToken(null);
+            setCustomerUsername(null);
+            if (typeof onCustomerSessionExpired === 'function') onCustomerSessionExpired();
         }
     }
 
@@ -105,6 +157,9 @@ async function initAdminData() {
     _settingsCache = state.settings;
     _eventsCache = state.events;
     _eventRequestsCache = state.eventRequests || [];
+    _purchaseRequestsCache = state.purchaseRequests || [];
+    _customersCache = state.customers || [];
+    _passwordRecoveryRequestsCache = state.passwordRecoveryRequests || [];
     _activityLogCache = state.activityLog;
     return state;
 }
@@ -282,11 +337,12 @@ async function spinEventWheelApi(eventId) {
 }
 
 // Giai đoạn 2 — khóa QR: khách gửi yêu cầu tham gia (đã chuyển khoản theo QR + số tiền admin
-// đặt), yêu cầu rơi vào "pending" và chờ Admin duyệt trong trang quản trị.
-async function requestEventAccessApi(eventId, note) {
+// đặt), yêu cầu rơi vào "pending" và chờ Admin duyệt trong trang quản trị. Bắt buộc đã đăng
+// nhập tài khoản khách hàng — payerName/payerBankAccount dùng khi khách quên ghi nội dung CK.
+async function requestEventAccessApi(eventId, note, payerName, payerBankAccount) {
     return apiFetch(`/api/events/${eventId}/request-access`, {
         method: 'POST',
-        body: JSON.stringify({ deviceCode: getOrCreateDeviceCode(), note })
+        body: JSON.stringify({ deviceCode: getOrCreateDeviceCode(), note, payerName, payerBankAccount })
     });
 }
 
@@ -309,6 +365,65 @@ async function rejectEventRequestApi(id) {
     return reqEntry;
 }
 
+// --- Quản trị: danh sách + duyệt/từ chối yêu cầu mua acc ---
+async function fetchPurchaseRequestsAdminApi() {
+    const list = await apiFetch('/api/admin/purchase-requests');
+    _purchaseRequestsCache = list;
+    return list;
+}
+async function approvePurchaseRequestApi(id) {
+    const reqEntry = await apiFetch(`/api/admin/purchase-requests/${id}/approve`, { method: 'PUT' });
+    const idx = _purchaseRequestsCache.findIndex(r => r.id === id);
+    if (idx !== -1) _purchaseRequestsCache[idx] = reqEntry;
+    return reqEntry;
+}
+async function rejectPurchaseRequestApi(id, reason) {
+    const reqEntry = await apiFetch(`/api/admin/purchase-requests/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+    const idx = _purchaseRequestsCache.findIndex(r => r.id === id);
+    if (idx !== -1) _purchaseRequestsCache[idx] = reqEntry;
+    return reqEntry;
+}
+
+// ------------------------------------------------------------
+// QUẢN TRỊ: QUẢN LÝ KHÁCH HÀNG (khóa/mở khóa/xóa/xem-đặt lại mật khẩu) + yêu cầu khôi phục
+// ------------------------------------------------------------
+async function fetchCustomersAdminApi() {
+    const list = await apiFetch('/api/admin/customers');
+    _customersCache = list;
+    return list;
+}
+async function toggleCustomerLockApi(id, reason) {
+    const customer = await apiFetch(`/api/admin/customers/${id}/toggle-lock`, { method: 'PUT', body: JSON.stringify({ reason }) });
+    const idx = _customersCache.findIndex(c => c.id === id);
+    if (idx !== -1) _customersCache[idx] = customer;
+    return customer;
+}
+async function deleteCustomerApi(id, adminPassword) {
+    await apiFetch(`/api/admin/customers/${id}`, { method: 'DELETE', body: JSON.stringify({ adminPassword }) });
+    _customersCache = _customersCache.filter(c => c.id !== id);
+}
+async function viewCustomerPasswordApi(id, adminPassword) {
+    return apiFetch(`/api/admin/customers/${id}/view-password`, { method: 'POST', body: JSON.stringify({ adminPassword }) });
+}
+async function resetCustomerPasswordApi(id, adminPassword) {
+    const result = await apiFetch(`/api/admin/customers/${id}/reset-password`, { method: 'PUT', body: JSON.stringify({ adminPassword }) });
+    // Đặt lại mật khẩu cũng tự mở khóa tài khoản ở server -> cập nhật lại cache trạng thái
+    const idx = _customersCache.findIndex(c => c.id === id);
+    if (idx !== -1) { _customersCache[idx].status = 'active'; _customersCache[idx].failedAttempts = 0; }
+    return result;
+}
+async function fetchPasswordRecoveryRequestsApi() {
+    const list = await apiFetch('/api/admin/password-recovery-requests');
+    _passwordRecoveryRequestsCache = list;
+    return list;
+}
+async function resolveRecoveryRequestApi(id) {
+    const reqEntry = await apiFetch(`/api/admin/password-recovery-requests/${id}/resolve`, { method: 'PUT' });
+    const idx = _passwordRecoveryRequestsCache.findIndex(r => r.id === id);
+    if (idx !== -1) _passwordRecoveryRequestsCache[idx] = reqEntry;
+    return reqEntry;
+}
+
 // ------------------------------------------------------------
 // TIỆN ÍCH CHUNG
 // ------------------------------------------------------------
@@ -324,4 +439,45 @@ function escapeHtml(str) {
 
 function formatDateTime(ts) {
     return new Date(ts).toLocaleString('vi-VN');
+}
+
+// ------------------------------------------------------------
+// TÀI KHOẢN KHÁCH HÀNG — bắt buộc đăng ký (nếu chưa có) / đăng nhập (nếu đã có) trước khi mua
+// acc hoặc tham gia sự kiện có phí. Token lưu localStorage nên khách không phải đăng nhập lại
+// mỗi lần mở lại trang.
+// ------------------------------------------------------------
+async function customerRegisterApi(username, password) {
+    const data = await apiFetch('/api/customer/register', { method: 'POST', body: JSON.stringify({ username, password }) });
+    setCustomerToken(data.token);
+    setCustomerUsername(data.username);
+    return data;
+}
+async function customerLoginApi(username, password) {
+    const data = await apiFetch('/api/customer/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    setCustomerToken(data.token);
+    setCustomerUsername(data.username);
+    return data;
+}
+async function customerLogoutApi() {
+    try { await apiFetch('/api/customer/logout', { method: 'POST' }); } catch (e) { /* phiên có thể đã hết hạn, bỏ qua */ }
+    setCustomerToken(null);
+    setCustomerUsername(null);
+}
+async function customerRecoveryRequestApi(username, note) {
+    return apiFetch('/api/customer/recovery-request', { method: 'POST', body: JSON.stringify({ username, note }) });
+}
+
+// ------------------------------------------------------------
+// YÊU CẦU MUA ACC — gửi kèm tên/số tài khoản đã chuyển (phòng khi quên ghi nội dung CK) để
+// Admin đối chiếu ngân hàng đã nhận tiền rồi duyệt. deadlineMs trả về dùng để đếm ngược 5 phút
+// trước khi hiện nút chat Zalo hỗ trợ nếu Admin chưa kịp duyệt.
+// ------------------------------------------------------------
+async function submitPurchaseRequestApi(accountId, payerName, payerBankAccount) {
+    return apiFetch('/api/purchase-requests', {
+        method: 'POST',
+        body: JSON.stringify({ accountId, payerName, payerBankAccount })
+    });
+}
+async function getMyPurchaseRequestsApi() {
+    return apiFetch('/api/purchase-requests/mine');
 }
