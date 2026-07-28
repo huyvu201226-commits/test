@@ -654,6 +654,7 @@ img, svg, video, iframe { max-width: 100%; }
 .type-reg { background: #64748b; color: white; }
 .type-vip { background: linear-gradient(135deg, var(--gold), #1d4ed8); color: #fff; }
 .type-ttx { background: #8b5cf6; color: white; }
+.type-doiso { background: #f97316; color: white; }
 
 .acc-body {
     padding: 15px;
@@ -752,6 +753,45 @@ img, svg, video, iframe { max-width: 100%; }
     color: var(--text-muted);
     font-size: 1.5rem;
     cursor: pointer;
+}
+
+/* Modal đăng nhập/đăng ký bắt buộc (auth gate) — khi ở chế độ bắt buộc (chưa đăng nhập,
+   vừa bấm "Ấn vào đây để tiếp tục"), ẩn nút đóng để khách không thể tắt modal mà không
+   đăng nhập/đăng ký xong. Ở chế độ bình thường (mở từ navbar hoặc trước khi mua) vẫn có
+   thể đóng như các modal khác. */
+.modal-overlay.mandatory .btn-close-modal {
+    display: none;
+}
+
+/* Input dùng chung cho các form (đăng nhập/đăng ký/quên mật khẩu...) */
+.form-control {
+    width: 100%;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.auth-toggle-link {
+    display: block;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--gold);
+    margin-top: 12px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.auth-forgot-link {
+    display: block;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    cursor: pointer;
+    text-decoration: none;
 }
 
 .btn-submit {

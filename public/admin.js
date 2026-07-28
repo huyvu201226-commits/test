@@ -874,14 +874,23 @@ function renderPurchaseRequestsAdmin() {
     sorted.forEach(r => {
         const statusInfo = PURCHASE_REQUEST_STATUS_LABELS[r.status] || { text: r.status, badge: 'badge-sold' };
         const actions = r.status === 'pending'
-            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="approve-purchase-request">Duyệt</button>
-               <button class="btn-sm btn-delete" data-id="${r.id}" data-action="reject-purchase-request">Từ chối</button>`
-            : (r.status === 'rejected' && r.rejectReason ? `<span style="font-size:0.75rem;color:var(--text-muted);">Lý do: ${escapeHtml(r.rejectReason)}</span>` : '—');
+            ? `<div style="display:flex; flex-direction:column; gap:4px; min-width:150px;">
+                   <input type="text" class="form-control" id="prAccInput_${r.id}" placeholder="Tài khoản giao cho khách" style="margin-bottom:0; font-size:0.8rem; padding:6px;">
+                   <input type="text" class="form-control" id="prPassInput_${r.id}" placeholder="Mật khẩu giao cho khách" style="margin-bottom:0; font-size:0.8rem; padding:6px;">
+                   <button class="btn-sm btn-unlock" data-id="${r.id}" data-action="approve-purchase-request">Duyệt & Giao Acc</button>
+                   <button class="btn-sm btn-delete" data-id="${r.id}" data-action="reject-purchase-request">Từ chối</button>
+               </div>`
+            : (r.status === 'approved'
+                ? `<div style="font-size:0.75rem; color: var(--text-muted);">
+                       <div>Tài khoản: <b>${escapeHtml(r.deliveredAccount || '—')}</b></div>
+                       <div>Mật khẩu: <b>${escapeHtml(r.deliveredPassword || '—')}</b></div>
+                   </div>`
+                : (r.status === 'rejected' && r.rejectReason ? `<span style="font-size:0.75rem;color:var(--text-muted);">Lý do: ${escapeHtml(r.rejectReason)}</span>` : '—'));
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${escapeHtml(r.accountCode)}<div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(r.accountName)} · ${formatVND(r.accountPrice)}</div></td>
             <td style="font-size:0.8rem;">${escapeHtml(r.customerUsername)}</td>
-            <td style="font-size:0.8rem;">${escapeHtml(r.payerName || '—')}${r.payerBankAccount ? ' · ' + escapeHtml(r.payerBankAccount) : ''}</td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.payerName || '—')}${r.payerBankAccount ? ' · ' + escapeHtml(r.payerBankAccount) : ''}${r.phoneNumber ? '<br><span style="color:var(--gold);">SĐT cần đổi: ' + escapeHtml(r.phoneNumber) + '</span>' : ''}</td>
             <td style="font-size:0.8rem;">${fmt(r.createdAt)}</td>
             <td><span class="badge-status ${statusInfo.badge}">${statusInfo.text}</span></td>
             <td>${actions}</td>
@@ -893,9 +902,17 @@ function renderPurchaseRequestsAdmin() {
 }
 
 async function approvePurchaseRequestUI(id) {
-    if (!confirm('Duyệt yêu cầu mua acc này? Acc sẽ tự động chuyển sang trạng thái "Đã bán".')) return;
+    const accInput = document.getElementById(`prAccInput_${id}`);
+    const passInput = document.getElementById(`prPassInput_${id}`);
+    const deliveredAccount = accInput ? accInput.value.trim() : '';
+    const deliveredPassword = passInput ? passInput.value.trim() : '';
+    if (!deliveredAccount || !deliveredPassword) {
+        alert('Vui lòng nhập đầy đủ tài khoản và mật khẩu của acc để giao cho khách trước khi duyệt.');
+        return;
+    }
+    if (!confirm('Duyệt yêu cầu mua acc này và giao ngay tài khoản/mật khẩu vừa nhập cho khách? Acc sẽ tự động chuyển sang trạng thái "Đã bán".')) return;
     try {
-        await approvePurchaseRequestApi(id);
+        await approvePurchaseRequestApi(id, deliveredAccount, deliveredPassword);
         renderPurchaseRequestsAdmin();
         renderAdminAccounts();
         renderActivityLog();
@@ -1039,7 +1056,7 @@ function renderRecoveryRequestsAdmin() {
     sorted.forEach(r => {
         const statusInfo = RECOVERY_REQUEST_STATUS_LABELS[r.status] || { text: r.status, badge: 'badge-sold' };
         const actions = r.status === 'pending'
-            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="resolve-recovery-request">Đánh dấu đã xử lý</button>`
+            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="resolve-recovery-request">Xác minh &amp; Cấp lại mật khẩu</button>`
             : '—';
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1056,12 +1073,29 @@ function renderRecoveryRequestsAdmin() {
 }
 
 async function resolveRecoveryRequestUI(id) {
+    const reqEntry = getPasswordRecoveryRequests().find(r => r.id === id);
+    if (!reqEntry) { alert('Không tìm thấy yêu cầu này.'); return; }
+    if (!reqEntry.customerId) { alert('Yêu cầu này thiếu thông tin tài khoản khách, không thể cấp lại mật khẩu tự động.'); return; }
+
+    if (!confirm(`Xác nhận đã nhắn Zalo và xác minh đúng chủ tài khoản "${reqEntry.username}"?\n\nSau khi xác nhận, hệ thống sẽ cấp một mật khẩu tạm mới cho tài khoản này và đánh dấu yêu cầu là đã xử lý.`)) return;
+
+    const adminPassword = prompt('Xác nhận: nhập lại mật khẩu Admin để cấp lại mật khẩu cho khách:');
+    if (!adminPassword) return;
+
     try {
+        // 1) Cấp mật khẩu tạm mới cho đúng tài khoản khách đã gửi yêu cầu (đồng thời tự mở khóa
+        //    nếu tài khoản đang bị khóa do nhập sai nhiều lần).
+        const resetResult = await resetCustomerPasswordApi(reqEntry.customerId, adminPassword);
+        // 2) Đánh dấu yêu cầu khôi phục là đã xử lý.
         await resolveRecoveryRequestApi(id);
+
         renderRecoveryRequestsAdmin();
+        renderCustomersAdmin();
         renderActivityLog();
+
+        alert(`Đã xác minh và cấp lại mật khẩu cho khách "${resetResult.username}".\n\nMật khẩu tạm mới: ${resetResult.tempPassword}\n\nHãy gửi mật khẩu này cho khách qua Zalo ngay bây giờ.`);
     } catch (err) {
-        alert('Lỗi: ' + err.message);
+        alert('Lỗi khi cấp lại mật khẩu: ' + err.message);
     }
 }
 

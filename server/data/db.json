@@ -123,6 +123,16 @@
   ],
   "activityLog": [
     {
+      "time": 1785216220961,
+      "action": "Yêu cầu mua acc",
+      "detail": "Khách \"huyduc\" gửi yêu cầu mua acc reg-10 (reg bijan)."
+    },
+    {
+      "time": 1785216190015,
+      "action": "Khách đăng ký tài khoản",
+      "detail": "Tài khoản khách hàng mới: \"huyduc\"."
+    },
+    {
       "time": 1785143337848,
       "action": "Thêm tài khoản mới",
       "detail": "Đã thêm acc reg-10 (reg bijan). [Admin]"
@@ -191,7 +201,11 @@
   "deviceState": {
     "JH-DISC-FK17DU": {
       "discountUsed": false,
-      "promoSpin": null,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
       "freeSpin": null,
       "events": {}
     },
@@ -253,9 +267,13 @@
     },
     "JH-DISC-Z5M8TK": {
       "discountUsed": false,
-      "promoSpin": null,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
       "freeSpin": {
-        "day": "2026-07-27",
+        "day": "2026-07-28",
         "spun": true,
         "won": false,
         "prizeCode": null
@@ -278,7 +296,7 @@
       "discountUsed": false,
       "promoSpin": null,
       "freeSpin": {
-        "day": "2026-07-27",
+        "day": "2026-07-28",
         "spun": true,
         "won": false,
         "prizeCode": null
@@ -353,6 +371,21 @@
         "prizeCode": null
       },
       "events": {}
+    },
+    "JH-DISC-9IP2JI": {
+      "discountUsed": false,
+      "promoSpin": {
+        "month": "2026-7",
+        "spun": true,
+        "won": false
+      },
+      "freeSpin": {
+        "day": "2026-07-28",
+        "spun": true,
+        "won": false,
+        "prizeCode": null
+      },
+      "events": {}
     }
   },
   "events": [
@@ -398,11 +431,43 @@
       "facebook": ""
     },
     "adminPasswordHash": "ed7ccb2ea51e5b1b97f9c34db98aea5fee841b117e6d6935a18fdce367e88dae",
-    "adminPasswordSalt": "dcd72d610e16ebe3c9f4b63c4448717c"
+    "adminPasswordSalt": "dcd72d610e16ebe3c9f4b63c4448717c",
+    "customerSecretKey": "3bbe30aa27922f622e70405263dd891f4f0872f7e39f2cc293283ed8a19c0813"
   },
   "collaborators": [],
   "eventRequests": [],
-  "customers": [],
+  "customers": [
+    {
+      "id": "cus_1785216190000",
+      "username": "huyduc",
+      "passwordHash": "5b0cf3292448b3b340a1c785aed2037fbb2080f08cf631cccf81df2d8f8c3319",
+      "passwordSalt": "c20ff5a80d8858aac149e15960032a68",
+      "passwordEncrypted": "dbc837172a8e5e6a6f774431:0fde825eb537ec0a54df9a626593e8ce:aa69787d7bef",
+      "status": "active",
+      "failedAttempts": 0,
+      "lockedAt": null,
+      "lockReason": null,
+      "createdAt": 1785216190015,
+      "updatedAt": 1785216190015
+    }
+  ],
   "passwordRecoveryRequests": [],
-  "purchaseRequests": []
+  "purchaseRequests": [
+    {
+      "id": "pr_1785216220961",
+      "customerUsername": "huyduc",
+      "accountId": 1785143337848,
+      "accountCode": "reg-10",
+      "accountName": "reg bijan",
+      "accountPrice": 55000,
+      "payerName": "",
+      "payerBankAccount": "",
+      "phoneNumber": "",
+      "note": "",
+      "status": "pending",
+      "createdAt": 1785216220961,
+      "deadlineMs": 1785216520961,
+      "resolvedAt": null
+    }
+  ]
 }

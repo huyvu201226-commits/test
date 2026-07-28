@@ -48,6 +48,7 @@
             <a href="#" class="nav-link active" onclick="switchTab('introTab', this)"><i class="fa-solid fa-circle-info"></i> Giới Thiệu</a>
             <a href="#" class="nav-link" onclick="switchTab('shopTab', this)"><i class="fa-solid fa-store"></i> Lựa Acc Có Sẵn</a>
             <a href="#" class="nav-link" onclick="switchTab('formTab', this)"><i class="fa-solid fa-file-pen"></i> Đăng Kí Mua Acc</a>
+            <a href="#" class="nav-link" onclick="openCustomerAuthModalOrAccount(); return false;"><i class="fa-solid fa-user"></i> <span id="customerAuthNavLabel">Đăng Nhập</span></a>
             <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()"><i class="fa-solid fa-sun"></i> Sáng</button>
         </nav>
     </header>
@@ -208,6 +209,7 @@
                     <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('reg', this)">Acc Reg</button>
                     <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('vip', this)">Acc VIP</button>
                     <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('ttx', this)">Acc TTX</button>
+                    <button class="btn-preset" data-filter-group="type" onclick="setTypeFilter('doiso', this)">Acc Đổi Số</button>
                 </div>
             </div>
 
@@ -267,6 +269,36 @@
         </div>
     </div>
 
+    <!-- Modal Đăng Nhập / Đăng Ký Tài Khoản Khách Hàng — bắt buộc phải đăng nhập (nếu đã có
+         tài khoản) hoặc đăng ký (nếu chưa có) ngay sau khi bấm "Ấn vào đây để tiếp tục" thì mới
+         vào được trang Shop. Nút đóng chỉ hiện khi mở KHÔNG bắt buộc (ví dụ mở lại từ navbar). -->
+    <div class="modal-overlay" id="customerAuthModal">
+        <div class="modal-card animate-pop">
+            <button class="btn-close-modal" onclick="closeCustomerAuthModal()">&times;</button>
+            <h3 id="customerAuthTitle" style="margin-bottom: 10px;"><i class="fa-solid fa-user-lock"></i> Đăng Nhập Tài Khoản</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">Vui lòng đăng nhập (nếu đã có tài khoản) hoặc đăng ký tài khoản mới để tiếp tục sử dụng Shop.</p>
+            <input type="text" id="customerAuthUsername" class="form-control" placeholder="Tên tài khoản" autocomplete="username">
+            <input type="password" id="customerAuthPassword" class="form-control" placeholder="Mật khẩu" autocomplete="current-password">
+            <p id="customerAuthMsg" style="font-size: 0.82rem; color: #f87171; margin-bottom: 8px;"></p>
+            <button class="btn-submit" id="customerAuthSubmitBtn" onclick="submitCustomerAuth()">Đăng Nhập</button>
+            <a href="#" class="auth-toggle-link" id="customerAuthToggleLink" onclick="toggleCustomerAuthMode(); return false;">Chưa có tài khoản? Đăng ký</a>
+            <a href="#" class="auth-forgot-link" onclick="openCustomerForgotModal(); return false;">Quên mật khẩu?</a>
+        </div>
+    </div>
+
+    <!-- Modal Quên Mật Khẩu — gửi yêu cầu lên máy chủ để Admin xác minh danh tính rồi cấp lại,
+         đồng thời tự mở Zalo để khách chủ động nhắn xác minh ngay với Admin. -->
+    <div class="modal-overlay" id="customerForgotModal">
+        <div class="modal-card animate-pop">
+            <button class="btn-close-modal" onclick="closeCustomerForgotModal()">&times;</button>
+            <h3 style="margin-bottom: 10px;"><i class="fa-solid fa-key"></i> Quên Mật Khẩu</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">Nhập tên tài khoản, sau đó nhắn Zalo cho Admin để xác minh danh tính và được cấp lại mật khẩu mới.</p>
+            <input type="text" id="customerForgotUsername" class="form-control" placeholder="Tên tài khoản">
+            <p id="customerForgotMsg" style="font-size: 0.82rem; margin-bottom: 8px;"></p>
+            <button class="btn-submit" onclick="submitCustomerForgot()">Gửi Yêu Cầu & Mở Zalo Admin</button>
+        </div>
+    </div>
+
     <!-- Modal Thanh Toán QR Tự Động -->
     <div class="modal-overlay" id="buyModal">
         <div class="modal-card animate-pop">
@@ -301,7 +333,36 @@
                 </span>
             </div>
             <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;"><i class="fa-solid fa-triangle-exclamation"></i> Vui lòng chuyển khoản đúng số tiền và nội dung ghi trên để được xử lý tự động.</p>
-            <button class="btn-submit" onclick="confirmPaymentZalo()">Xác Nhận Đã Chuyển & Gửi Zalo Admin</button>
+
+            <!-- Chỉ hiện khi mua Acc Đổi Số — Admin cần số điện thoại khách muốn đổi vào acc để hỗ trợ. -->
+            <div id="buyPhoneBox" style="display:none;">
+                <input type="tel" id="buyPhoneNumber" class="form-control" placeholder="Số điện thoại cần đổi vào acc (bắt buộc với Acc Đổi Số)">
+            </div>
+
+            <input type="text" id="buyPayerName" class="form-control" placeholder="Tên người chuyển khoản (giúp Admin đối chiếu nhanh hơn)">
+            <input type="text" id="buyPayerBankAccount" class="form-control" placeholder="Số tài khoản/Số thẻ đã chuyển (không bắt buộc)">
+
+            <p id="buyModalMsg" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;"></p>
+
+            <button class="btn-submit" id="buySubmitBtn" onclick="confirmPaymentZalo()">Đã Thanh Toán - Gửi Yêu Cầu Cho Admin</button>
+
+            <!-- Khối chờ Admin duyệt: đếm ngược 5 phút, hết giờ thì hiện nút chat Zalo hỗ trợ.
+                 Khi Admin duyệt xong, khối này tự ẩn và JS thay bằng khối "buyDeliveredBox" bên
+                 dưới hiển thị đúng tài khoản/mật khẩu vừa được giao. -->
+            <div id="buyWaitBox" style="display:none; text-align:center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-top: 10px;">
+                <p style="font-size: 0.85rem; margin-bottom: 6px;">Đang chờ Admin duyệt, còn lại: <b id="buyCountdown" style="color: var(--gold);">05:00</b></p>
+                <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px;">Hết thời gian mà Admin chưa duyệt, bạn có thể nhắn Zalo để được hỗ trợ nhanh hơn.</p>
+                <a id="buyZaloBtn" class="btn-submit" style="display:none; text-decoration:none; text-align:center;" target="_blank" rel="noopener noreferrer">Chat Zalo Admin Ngay</a>
+            </div>
+
+            <!-- Khối hiển thị tài khoản/mật khẩu sau khi Admin duyệt và nhập thông tin giao acc. -->
+            <div id="buyDeliveredBox" style="display:none; text-align:left; background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-top: 10px;">
+                <div style="font-size:0.8rem; color: var(--text-muted); margin-bottom:2px;">Tài khoản</div>
+                <div id="buyDeliveredAccount" style="font-weight:700; margin-bottom:8px; word-break:break-all;"></div>
+                <div style="font-size:0.8rem; color: var(--text-muted); margin-bottom:2px;">Mật khẩu</div>
+                <div id="buyDeliveredPassword" style="font-weight:700; word-break:break-all;"></div>
+                <button class="btn-submit" style="margin-top:10px;" onclick="copyBuyDeliveredCreds()">Sao Chép Tài Khoản/Mật Khẩu</button>
+            </div>
         </div>
     </div>
 

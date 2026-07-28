@@ -13,7 +13,8 @@ const API_BASE_URL = '';
 const ACCOUNT_TYPE_LABELS = {
     reg: { text: 'Acc Reg', badge: 'type-reg' },
     vip: { text: 'Acc VIP', badge: 'type-vip' },
-    ttx: { text: 'Acc TTX', badge: 'type-ttx' }
+    ttx: { text: 'Acc TTX', badge: 'type-ttx' },
+    doiso: { text: 'Acc Đổi Số', badge: 'type-doiso' }
 };
 
 const DEFAULT_LOGO = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100";
@@ -371,8 +372,8 @@ async function fetchPurchaseRequestsAdminApi() {
     _purchaseRequestsCache = list;
     return list;
 }
-async function approvePurchaseRequestApi(id) {
-    const reqEntry = await apiFetch(`/api/admin/purchase-requests/${id}/approve`, { method: 'PUT' });
+async function approvePurchaseRequestApi(id, deliveredAccount, deliveredPassword) {
+    const reqEntry = await apiFetch(`/api/admin/purchase-requests/${id}/approve`, { method: 'PUT', body: JSON.stringify({ deliveredAccount, deliveredPassword }) });
     const idx = _purchaseRequestsCache.findIndex(r => r.id === id);
     if (idx !== -1) _purchaseRequestsCache[idx] = reqEntry;
     return reqEntry;
@@ -472,10 +473,10 @@ async function customerRecoveryRequestApi(username, note) {
 // Admin đối chiếu ngân hàng đã nhận tiền rồi duyệt. deadlineMs trả về dùng để đếm ngược 5 phút
 // trước khi hiện nút chat Zalo hỗ trợ nếu Admin chưa kịp duyệt.
 // ------------------------------------------------------------
-async function submitPurchaseRequestApi(accountId, payerName, payerBankAccount) {
+async function submitPurchaseRequestApi(accountId, payerName, payerBankAccount, phoneNumber) {
     return apiFetch('/api/purchase-requests', {
         method: 'POST',
-        body: JSON.stringify({ accountId, payerName, payerBankAccount })
+        body: JSON.stringify({ accountId, payerName, payerBankAccount, phoneNumber })
     });
 }
 async function getMyPurchaseRequestsApi() {

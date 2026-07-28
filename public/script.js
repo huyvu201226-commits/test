@@ -156,6 +156,14 @@ function enterWebsite() {
     const overlay = document.getElementById('welcomeOverlay');
     if (overlay) overlay.classList.add('hidden');
 
+    // Bắt buộc khách phải đăng nhập (nếu đã có tài khoản) hoặc đăng ký (nếu chưa có) ngay sau
+    // khi bấm "Ấn vào đây để tiếp tục" thì mới được xem tiếp trang Shop — mở NGAY, đồng bộ,
+    // không đợi (không await) gì trước audio.play() bên dưới để không phá vỡ thao tác chạm
+    // (xem ghi chú autoplay phía trên hàm này).
+    if (!isCustomerLoggedIn()) {
+        openCustomerAuthGate();
+    }
+
     const audio = document.getElementById('bgAudio');
     if (!audio) return;
 
@@ -671,6 +679,13 @@ function copyEventPrizeCreds() {
     alert('Đã sao chép tài khoản/mật khẩu!');
 }
 
+function copyBuyDeliveredCreds() {
+    const acc = document.getElementById('buyDeliveredAccount').textContent;
+    const pass = document.getElementById('buyDeliveredPassword').textContent;
+    navigator.clipboard.writeText(`Tài khoản: ${acc}\nMật khẩu: ${pass}`);
+    alert('Đã sao chép tài khoản/mật khẩu!');
+}
+
 // --- Vòng Quay May Mắn ---
 async function playEventWheel(eventId) {
     if (_eventGameBusy[eventId]) return;
@@ -1124,8 +1139,11 @@ function openBuyModal(code) {
     document.getElementById('modalSyntaxCode').textContent = `Nội dung CK: ${syntax}`;
     document.getElementById('buyPayerName').value = '';
     document.getElementById('buyPayerBankAccount').value = '';
+    document.getElementById('buyPhoneNumber').value = '';
+    document.getElementById('buyPhoneBox').style.display = (acc.type === 'doiso') ? 'block' : 'none';
     document.getElementById('buyModalMsg').textContent = '';
     document.getElementById('buyWaitBox').style.display = 'none';
+    document.getElementById('buyDeliveredBox').style.display = 'none';
     const submitBtn = document.getElementById('buySubmitBtn');
     submitBtn.style.display = 'inline-block';
     submitBtn.disabled = false;
@@ -1191,7 +1209,10 @@ function startBuyWait(deadlineMs, requestId) {
                 clearInterval(_buyPollTimer);
                 waitBox.style.display = 'none';
                 if (reqEntry.status === 'approved') {
-                    document.getElementById('buyModalMsg').textContent = 'Yêu cầu đã được Admin duyệt! Vui lòng liên hệ Zalo Admin để nhận acc.';
+                    document.getElementById('buyModalMsg').textContent = 'Yêu cầu đã được Admin duyệt! Thông tin acc của bạn ở ngay bên dưới.';
+                    document.getElementById('buyDeliveredAccount').textContent = reqEntry.deliveredAccount || '—';
+                    document.getElementById('buyDeliveredPassword').textContent = reqEntry.deliveredPassword || '—';
+                    document.getElementById('buyDeliveredBox').style.display = 'block';
                     renderAccounts(getAccounts());
                 } else {
                     document.getElementById('buyModalMsg').textContent = `Yêu cầu đã bị từ chối.${reqEntry.rejectReason ? ' Lý do: ' + reqEntry.rejectReason : ''}`;
@@ -1206,14 +1227,22 @@ function startBuyWait(deadlineMs, requestId) {
 
 async function confirmPaymentZalo() {
     const submitBtn = document.getElementById('buySubmitBtn');
-    submitBtn.disabled = true;
     document.getElementById('buyModalMsg').textContent = '';
 
     const payerName = document.getElementById('buyPayerName').value.trim();
     const payerBankAccount = document.getElementById('buyPayerBankAccount').value.trim();
+    const phoneNumber = document.getElementById('buyPhoneNumber').value.trim();
+
+    const acc = getAccounts().find(a => a.id === currentBuyingAccountId);
+    if (acc && acc.type === 'doiso' && !phoneNumber) {
+        document.getElementById('buyModalMsg').textContent = 'Vui lòng nhập số điện thoại cần đổi vào acc trước khi gửi yêu cầu.';
+        return;
+    }
+
+    submitBtn.disabled = true;
 
     try {
-        const result = await submitPurchaseRequestApi(currentBuyingAccountId, payerName, payerBankAccount);
+        const result = await submitPurchaseRequestApi(currentBuyingAccountId, payerName, payerBankAccount, phoneNumber);
 
         // Chỉ tiêu mã giảm 5%/thiết bị khi đó thực sự là nguồn giảm giá được áp dụng — nếu ưu đãi
         // đến từ sự kiện "Giảm Deal" thì để dành mã 5% cho lần mua sau (không có sự kiện).
@@ -1242,6 +1271,18 @@ async function confirmPaymentZalo() {
 let _customerAuthMode = 'login'; // 'login' | 'register'
 let _pendingCustomerAction = null; // { type: 'buy', code } | { type: 'event', eventId } — thực hiện tiếp ngay sau khi đăng nhập/đăng ký thành công
 
+// true = đang ở màn hình "cổng" bắt buộc ngay sau enterWebsite() — chưa đăng nhập/đăng ký xong
+// thì không có cách nào đóng modal để xem tiếp trang Shop (không có nút đóng, không bấm ra
+// ngoài để tắt được). false = mở bình thường từ navbar hoặc trước khi mua, đóng được như cũ.
+let _authGateMandatory = false;
+
+// Gọi ngay sau khi khách bấm "Ấn vào đây để tiếp tục" mà chưa đăng nhập — mở modal ở chế độ
+// bắt buộc, mặc định tab "Đăng Nhập" (khách bấm chuyển sang "Đăng Ký" nếu chưa có tài khoản).
+function openCustomerAuthGate() {
+    _authGateMandatory = true;
+    openCustomerAuthModal('login');
+}
+
 // Nút trên navbar: hiện "Đăng Nhập" (mở modal) nếu chưa đăng nhập, hoặc "Tên khách (Đăng xuất)"
 // nếu đã đăng nhập — bấm vào khi đã đăng nhập sẽ hỏi xác nhận đăng xuất.
 function refreshCustomerAuthUI() {
@@ -1261,6 +1302,7 @@ function openCustomerAuthModalOrAccount() {
         }
         return;
     }
+    _authGateMandatory = false; // mở từ navbar luôn đóng được, không phải cổng bắt buộc
     openCustomerAuthModal('login');
 }
 
@@ -1270,9 +1312,15 @@ function openCustomerAuthModal(mode) {
     document.getElementById('customerAuthPassword').value = '';
     document.getElementById('customerAuthMsg').textContent = '';
     applyCustomerAuthMode();
-    document.getElementById('customerAuthModal').classList.add('active');
+    const modalEl = document.getElementById('customerAuthModal');
+    modalEl.classList.add('active');
+    modalEl.classList.toggle('mandatory', _authGateMandatory);
 }
 function closeCustomerAuthModal() {
+    // Ở chế độ bắt buộc (cổng vào sau enterWebsite), không có nút đóng để bấm nên hàm này chỉ
+    // có thể được gọi lại bởi chính app (ví dụ mở modal quên mật khẩu, hoặc sau khi đăng
+    // nhập/đăng ký thành công) — cứ đóng bình thường, việc "bắt buộc" nằm ở chỗ ẩn nút đóng
+    // trong CSS/HTML, không phải chặn hàm này.
     document.getElementById('customerAuthModal').classList.remove('active');
     _pendingCustomerAction = null;
 }
@@ -1293,6 +1341,7 @@ function toggleCustomerAuthMode() {
 function requireCustomerLoginOrPrompt(action) {
     if (isCustomerLoggedIn()) return true;
     _pendingCustomerAction = action;
+    _authGateMandatory = false; // đây là gợi ý đăng nhập trước khi mua, không phải cổng bắt buộc
     openCustomerAuthModal('login');
     return false;
 }
@@ -1324,6 +1373,7 @@ async function submitCustomerAuth() {
         } else {
             await customerRegisterApi(username, password);
         }
+        _authGateMandatory = false;
         refreshCustomerAuthUI();
         closeCustomerAuthModal();
         resumePendingCustomerAction();
@@ -1348,6 +1398,11 @@ function openCustomerForgotModal() {
 }
 function closeCustomerForgotModal() {
     document.getElementById('customerForgotModal').classList.remove('active');
+    // Nếu đang ở cổng bắt buộc và khách vẫn chưa đăng nhập, mở lại modal đăng nhập/đăng ký
+    // thay vì để lộ trang Shop ra ngoài mà chưa qua bước đăng nhập/đăng ký.
+    if (_authGateMandatory && !isCustomerLoggedIn()) {
+        openCustomerAuthModal(_customerAuthMode);
+    }
 }
 async function submitCustomerForgot() {
     const username = document.getElementById('customerForgotUsername').value.trim();

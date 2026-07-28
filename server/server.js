@@ -810,11 +810,16 @@ app.post('/api/events/:id/request-access', requireCustomer, (req, res) => {
 // nếu Admin chưa kịp duyệt.
 app.post('/api/purchase-requests', requireCustomer, (req, res) => {
     ensurePurchaseRequestsInitialized();
-    const { accountId, payerName, payerBankAccount, note } = req.body || {};
+    const { accountId, payerName, payerBankAccount, note, phoneNumber } = req.body || {};
     const id = Number(accountId);
     const acc = db.accounts.find(a => a.id === id);
     if (!acc) return res.status(404).json({ error: 'Không tìm thấy acc.' });
     if (acc.status !== 'selling') return res.status(400).json({ error: 'Acc này hiện không khả dụng để mua.' });
+
+    const phone = phoneNumber ? String(phoneNumber).trim().slice(0, 20) : '';
+    if (acc.type === 'doiso' && !phone) {
+        return res.status(400).json({ error: 'Vui lòng gửi kèm số điện thoại cần đổi vào acc.' });
+    }
 
     const existing = db.purchaseRequests.find(r => r.accountId === id && r.customerUsername === req.customerUsername && r.status === 'pending');
     if (existing) return res.json({ ok: true, status: 'pending', requestId: existing.id, deadlineMs: existing.deadlineMs });
@@ -829,6 +834,7 @@ app.post('/api/purchase-requests', requireCustomer, (req, res) => {
         accountPrice: acc.price,
         payerName: payerName ? String(payerName).slice(0, 100) : '',
         payerBankAccount: payerBankAccount ? String(payerBankAccount).slice(0, 50) : '',
+        phoneNumber: phone,
         note: note ? String(note).slice(0, 300) : '',
         status: 'pending', // pending | approved | rejected
         createdAt,
@@ -836,7 +842,7 @@ app.post('/api/purchase-requests', requireCustomer, (req, res) => {
         resolvedAt: null
     };
     db.purchaseRequests.unshift(reqEntry);
-    addActivityLog('Yêu cầu mua acc', `Khách "${req.customerUsername}" gửi yêu cầu mua acc ${acc.code} (${acc.name}).`);
+    addActivityLog('Yêu cầu mua acc', `Khách "${req.customerUsername}" gửi yêu cầu mua acc ${acc.code} (${acc.name}).${phone ? ' SĐT cần đổi: ' + phone : ''}`);
     persist();
     res.json({ ok: true, status: 'pending', requestId: reqEntry.id, deadlineMs: reqEntry.deadlineMs });
 });
@@ -855,19 +861,31 @@ app.get('/api/admin/purchase-requests', requireAdmin, (req, res) => {
     res.json(db.purchaseRequests);
 });
 
+// Duyệt yêu cầu mua: Admin phải nhập kèm tài khoản/mật khẩu của acc để giao ngay cho đúng khách
+// đang chờ (khách sẽ nhận được 2 thông tin này qua GET /api/purchase-requests/mine, vốn đã tự
+// lọc theo đúng customerUsername nên không lộ sang khách khác).
 app.put('/api/admin/purchase-requests/:id/approve', requireAdmin, (req, res) => {
     ensurePurchaseRequestsInitialized();
     const reqEntry = db.purchaseRequests.find(r => r.id === req.params.id);
     if (!reqEntry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu.' });
     if (reqEntry.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu này đã được xử lý trước đó.' });
 
+    const { deliveredAccount, deliveredPassword } = req.body || {};
+    const account = String(deliveredAccount || '').trim();
+    const password = String(deliveredPassword || '').trim();
+    if (!account || !password) {
+        return res.status(400).json({ error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu của acc để giao cho khách.' });
+    }
+
     reqEntry.status = 'approved';
     reqEntry.resolvedAt = Date.now();
+    reqEntry.deliveredAccount = account;
+    reqEntry.deliveredPassword = password;
 
     const acc = db.accounts.find(a => a.id === reqEntry.accountId);
     if (acc && acc.status === 'selling') acc.status = 'sold';
 
-    addActivityLog('Duyệt yêu cầu mua acc', `Đã duyệt khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}). [${actorLabel(req)}]`);
+    addActivityLog('Duyệt yêu cầu mua acc', `Đã duyệt khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}) và giao tài khoản. [${actorLabel(req)}]`);
     persist();
     res.json(reqEntry);
 });
