@@ -302,9 +302,10 @@ function isEligibleForDiscount(acc, discountUsed) {
     return !!acc && acc.type !== 'reg' && !discountUsed;
 }
 
-// Sự kiện "Giảm Deal" (uu_dai) đang hoạt động có % giảm cao nhất — áp dụng cho MỌI loại acc
-// (không loại trừ Acc Reg như mã giảm 5% theo thiết bị). Nếu có nhiều sự kiện Giảm Deal cùng
-// hoạt động, lấy sự kiện có % giảm cao nhất để khách luôn được hưởng ưu đãi tốt nhất.
+// Sự kiện "Giảm Deal" (uu_dai) đang hoạt động có % giảm cao nhất. Bản thân hàm này không lọc
+// theo loại acc — việc loại trừ Acc Reg được xử lý tập trung ở getAccountDiscountInfo() (script.js)
+// để chắc chắn Acc Reg không bao giờ được giảm giá dù nguồn giảm giá là gì. Nếu có nhiều sự kiện
+// Giảm Deal cùng hoạt động, lấy sự kiện có % giảm cao nhất để khách luôn được hưởng ưu đãi tốt nhất.
 function getBestActiveDealEvent() {
     const deals = getEvents().filter(ev => ev.type === 'uu_dai' && ev.displayState === 'active' && Number(ev.discountPercent) > 0);
     if (deals.length === 0) return null;

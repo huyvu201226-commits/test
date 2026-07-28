@@ -1035,9 +1035,11 @@ async function submitEventAccessRequest() {
 
 // Tính ưu đãi tốt nhất hiện có cho 1 acc — dùng chung cho cả lưới Shop (badge góc trái ảnh +
 // giá gạch ngang) và modal thanh toán, để 2 nơi luôn hiển thị đúng và khớp nhau.
-// Ưu tiên: mã giảm 5%/thiết bị (không áp cho Acc Reg, dùng 1 lần) HOẶC % của sự kiện "Giảm Deal"
-// đang hoạt động (áp cho mọi loại acc) — lấy % nào cao hơn.
+// QUAN TRỌNG: Acc Reg KHÔNG được áp dụng BẤT KỲ mã/ưu đãi giảm giá nào — không chỉ riêng mã 5%
+// theo thiết bị, mà cả % giảm của sự kiện "Giảm Deal" cũng phải loại trừ Acc Reg.
 function getAccountDiscountInfo(acc) {
+    if (!acc || acc.type === 'reg') return { source: null, percent: 0, dealEvent: null };
+
     const deviceEligible = isEligibleForDiscount(acc, _deviceStatus.discountUsed);
     const devicePercent = deviceEligible ? 5 : 0;
     const dealEvent = getBestActiveDealEvent();
@@ -1285,6 +1287,10 @@ function openBuyModal(code) {
     }
 
     document.getElementById('buyModal').classList.add('active');
+    // Luôn cuộn modal về đầu khi mở — tránh trường hợp lần mở trước đang cuộn dở dang, lần này
+    // mở acc khác lại hiện giữa chừng nội dung cũ.
+    const buyModalCard = document.querySelector('#buyModal .modal-card');
+    if (buyModalCard) buyModalCard.scrollTop = 0;
 }
 
 function closeModal() {
