@@ -786,6 +786,7 @@ function buildQrImageUrl(amount, note) {
 }
 
 function openEventQrModal(eventId) {
+    if (!requireCustomerLoginOrPrompt({ type: 'event', eventId })) return;
     const ev = getEvents().find(e => e.id === eventId);
     if (!ev) return;
     _currentEventQrId = eventId;
@@ -796,9 +797,15 @@ function openEventQrModal(eventId) {
     document.getElementById('eventQrAmountText').textContent = `Số tiền: ${formatVND(ev.qrAmount || 0)}`;
     document.getElementById('eventQrNoteText').textContent = ev.qrNote ? `Ghi chú: ${ev.qrNote}` : '';
     document.getElementById('eventQrMsg').textContent = '';
+    document.getElementById('eventQrPayerName').value = '';
+    document.getElementById('eventQrPayerBankAccount').value = '';
+    document.getElementById('eventQrWaitBox').style.display = 'none';
+    clearInterval(_eventQrCountdownTimer);
+    clearInterval(_eventQrPollTimer);
 
     const btn = document.getElementById('eventQrSubmitBtn');
     btn.disabled = false;
+    btn.style.display = 'inline-block';
     btn.textContent = 'Đã Chuyển Khoản - Gửi Yêu Cầu Tham Gia';
 
     document.getElementById('eventQrModal').classList.add('active');
@@ -807,6 +814,72 @@ function openEventQrModal(eventId) {
 function closeEventQrModal() {
     document.getElementById('eventQrModal').classList.remove('active');
     _currentEventQrId = null;
+    clearInterval(_eventQrCountdownTimer);
+    clearInterval(_eventQrPollTimer);
+}
+
+// Đếm ngược dùng CHUNG cho cả "chờ duyệt tham gia sự kiện" (startEventQrWait) và "chờ duyệt mua
+// acc" (startBuyWait) — 2 nơi này trước đây tự viết lặp lại y hệt đoạn đếm giờ + hiện nút Zalo
+// khi hết giờ, giờ gộp về 1 hàm dùng chung để dễ sửa/bảo trì (chỉ khác nhau ở phần polling trạng
+// thái, giữ riêng ở từng nơi gọi). Trả về id của setInterval để nơi gọi tự clearInterval khi đóng
+// modal hoặc bắt đầu lượt chờ mới.
+function startPaymentCountdown(deadlineMs, countdownEl, zaloBtn) {
+    zaloBtn.style.display = 'none';
+    zaloBtn.href = (getSettings().socialLinks && getSettings().socialLinks.zalo) || 'https://zalo.me/0362062410';
+    let timerId;
+    timerId = setInterval(() => {
+        const msLeft = deadlineMs - Date.now();
+        if (msLeft <= 0) {
+            countdownEl.textContent = '00:00';
+            zaloBtn.style.display = 'inline-block';
+            clearInterval(timerId);
+            return;
+        }
+        const totalSec = Math.floor(msLeft / 1000);
+        countdownEl.textContent = `${String(Math.floor(totalSec / 60)).padStart(2, '0')}:${String(totalSec % 60).padStart(2, '0')}`;
+    }, 1000);
+    return timerId;
+}
+
+// Đếm ngược 5 phút chờ Admin duyệt; hết giờ mà vẫn "pending" thì hiện nút chat Zalo hỗ trợ.
+// Đồng thời tự hỏi lại máy chủ mỗi 10s để đóng sớm nếu Admin đã duyệt/từ chối trước đó.
+let _eventQrCountdownTimer = null;
+let _eventQrPollTimer = null;
+function startEventQrWait(deadlineMs, eventId) {
+    const waitBox = document.getElementById('eventQrWaitBox');
+    const countdownEl = document.getElementById('eventQrCountdown');
+    const zaloBtn = document.getElementById('eventQrZaloBtn');
+    const submitBtn = document.getElementById('eventQrSubmitBtn');
+    waitBox.style.display = 'block';
+    submitBtn.style.display = 'none';
+
+    clearInterval(_eventQrCountdownTimer);
+    clearInterval(_eventQrPollTimer);
+    _eventQrCountdownTimer = startPaymentCountdown(deadlineMs, countdownEl, zaloBtn);
+
+    _eventQrPollTimer = setInterval(async () => {
+        try {
+            _deviceStatus = await getDeviceStatus();
+            const evState = (_deviceStatus.events && _deviceStatus.events[eventId]) || {};
+            if (evState.requestStatus === 'approved') {
+                clearInterval(_eventQrCountdownTimer);
+                clearInterval(_eventQrPollTimer);
+                document.getElementById('eventQrMsg').textContent = 'Đã được Admin duyệt! Bạn có thể tham gia sự kiện ngay bây giờ.';
+                waitBox.style.display = 'none';
+                renderEventGames();
+                setTimeout(closeEventQrModal, 1800);
+            } else if (evState.requestStatus === 'rejected') {
+                clearInterval(_eventQrCountdownTimer);
+                clearInterval(_eventQrPollTimer);
+                document.getElementById('eventQrMsg').textContent = 'Yêu cầu đã bị Admin từ chối. Vui lòng liên hệ Zalo Admin để biết thêm chi tiết.';
+                waitBox.style.display = 'none';
+                submitBtn.style.display = 'inline-block';
+                submitBtn.textContent = 'Gửi Lại Yêu Cầu Tham Gia';
+                submitBtn.disabled = false;
+                renderEventGames();
+            }
+        } catch (err) { /* im lặng, thử lại ở lần poll sau */ }
+    }, 10000);
 }
 
 async function submitEventAccessRequest() {
@@ -815,15 +888,21 @@ async function submitEventAccessRequest() {
     const btn = document.getElementById('eventQrSubmitBtn');
     btn.disabled = true;
 
+    const payerName = document.getElementById('eventQrPayerName').value.trim();
+    const payerBankAccount = document.getElementById('eventQrPayerBankAccount').value.trim();
+
     try {
-        const result = await requestEventAccessApi(eventId, '');
+        const result = await requestEventAccessApi(eventId, '', payerName, payerBankAccount);
         if (!_deviceStatus.events) _deviceStatus.events = {};
         const prev = _deviceStatus.events[eventId] || {};
         _deviceStatus.events[eventId] = { ...prev, requestStatus: result.requestStatus };
         document.getElementById('eventQrMsg').textContent = 'Đã gửi yêu cầu! Vui lòng chờ Admin duyệt (thường trong ít phút).';
-        btn.textContent = 'Đã Gửi Yêu Cầu';
         renderEventGames();
-        setTimeout(closeEventQrModal, 1800);
+        if (result.requestStatus === 'pending' && result.deadlineMs) {
+            startEventQrWait(result.deadlineMs, eventId);
+        } else if (result.requestStatus === 'approved') {
+            setTimeout(closeEventQrModal, 1200);
+        }
     } catch (err) {
         btn.disabled = false;
         document.getElementById('eventQrMsg').textContent = 'Lỗi: ' + err.message;
@@ -1007,6 +1086,7 @@ function setTypeFilter(type, btnElement) {
 
 // Modal thanh toán
 let currentBuyingCode = '';
+let currentBuyingAccountId = null;
 let currentBuyingPrice = 0;
 let currentDiscountApplied = false;
 let currentDiscountSource = null; // 'device' (mã giảm 5%/thiết bị) | 'deal' (sự kiện Giảm Deal) | null
@@ -1018,10 +1098,12 @@ let currentDiscountPercent = 0;
 // đang hoạt động (áp cho mọi loại acc) — lấy % nào cao hơn. Nếu sự kiện Giảm Deal đã đủ tốt,
 // KHÔNG tiêu mã 5% của thiết bị để dành cho lần mua sau không có sự kiện.
 function openBuyModal(code) {
+    if (!requireCustomerLoginOrPrompt({ type: 'buy', code })) return;
     const acc = getAccounts().find(a => a.code === code);
     if (!acc) return;
 
     currentBuyingCode = acc.code;
+    currentBuyingAccountId = acc.id;
 
     const discountInfo = getAccountDiscountInfo(acc);
     const dealEvent = discountInfo.dealEvent;
@@ -1040,6 +1122,16 @@ function openBuyModal(code) {
     document.getElementById('modalAccDesc').textContent = acc.description || 'Đang cập nhật...';
     document.getElementById('modalAccCode').textContent = acc.code;
     document.getElementById('modalSyntaxCode').textContent = `Nội dung CK: ${syntax}`;
+    document.getElementById('buyPayerName').value = '';
+    document.getElementById('buyPayerBankAccount').value = '';
+    document.getElementById('buyModalMsg').textContent = '';
+    document.getElementById('buyWaitBox').style.display = 'none';
+    const submitBtn = document.getElementById('buySubmitBtn');
+    submitBtn.style.display = 'inline-block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Đã Thanh Toán - Gửi Yêu Cầu Cho Admin';
+    clearInterval(_buyCountdownTimer);
+    clearInterval(_buyPollTimer);
 
     const originalPriceEl = document.getElementById('modalOriginalPrice');
     const discountNoteEl = document.getElementById('modalDiscountNote');
@@ -1070,28 +1162,212 @@ function openBuyModal(code) {
 
 function closeModal() {
     document.getElementById('buyModal').classList.remove('active');
+    clearInterval(_buyCountdownTimer);
+    clearInterval(_buyPollTimer);
+}
+
+// Đếm ngược 5 phút chờ Admin duyệt; hết giờ mà vẫn "pending" thì hiện nút chat Zalo hỗ trợ.
+// Tự hỏi lại máy chủ mỗi 10s để đóng sớm nếu Admin đã duyệt/từ chối.
+let _buyCountdownTimer = null;
+let _buyPollTimer = null;
+function startBuyWait(deadlineMs, requestId) {
+    const waitBox = document.getElementById('buyWaitBox');
+    const countdownEl = document.getElementById('buyCountdown');
+    const zaloBtn = document.getElementById('buyZaloBtn');
+    const submitBtn = document.getElementById('buySubmitBtn');
+    waitBox.style.display = 'block';
+    submitBtn.style.display = 'none';
+
+    clearInterval(_buyCountdownTimer);
+    clearInterval(_buyPollTimer);
+    _buyCountdownTimer = startPaymentCountdown(deadlineMs, countdownEl, zaloBtn);
+
+    _buyPollTimer = setInterval(async () => {
+        try {
+            const mine = await getMyPurchaseRequestsApi();
+            const reqEntry = mine.find(r => r.id === requestId);
+            if (reqEntry && reqEntry.status !== 'pending') {
+                clearInterval(_buyCountdownTimer);
+                clearInterval(_buyPollTimer);
+                waitBox.style.display = 'none';
+                if (reqEntry.status === 'approved') {
+                    document.getElementById('buyModalMsg').textContent = 'Yêu cầu đã được Admin duyệt! Vui lòng liên hệ Zalo Admin để nhận acc.';
+                    renderAccounts(getAccounts());
+                } else {
+                    document.getElementById('buyModalMsg').textContent = `Yêu cầu đã bị từ chối.${reqEntry.rejectReason ? ' Lý do: ' + reqEntry.rejectReason : ''}`;
+                    submitBtn.style.display = 'inline-block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Gửi Lại Yêu Cầu';
+                }
+            }
+        } catch (err) { /* im lặng, thử lại ở lần poll sau */ }
+    }, 10000);
 }
 
 async function confirmPaymentZalo() {
-    // Chỉ tiêu mã giảm 5%/thiết bị khi đó thực sự là nguồn giảm giá được áp dụng — nếu ưu đãi
-    // đến từ sự kiện "Giảm Deal" thì để dành mã 5% cho lần mua sau (không có sự kiện).
-    if (currentDiscountSource === 'device') {
-        try {
-            await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
-            _deviceStatus.discountUsed = true;
-            checkDeviceDiscountCode();
-            applyAllFilters();             // cập nhật lại badge giảm giá + giá gạch ngang trên lưới Shop
-        } catch (err) {
-            console.error('Không thể ghi nhận sử dụng mã giảm giá:', err);
+    const submitBtn = document.getElementById('buySubmitBtn');
+    submitBtn.disabled = true;
+    document.getElementById('buyModalMsg').textContent = '';
+
+    const payerName = document.getElementById('buyPayerName').value.trim();
+    const payerBankAccount = document.getElementById('buyPayerBankAccount').value.trim();
+
+    try {
+        const result = await submitPurchaseRequestApi(currentBuyingAccountId, payerName, payerBankAccount);
+
+        // Chỉ tiêu mã giảm 5%/thiết bị khi đó thực sự là nguồn giảm giá được áp dụng — nếu ưu đãi
+        // đến từ sự kiện "Giảm Deal" thì để dành mã 5% cho lần mua sau (không có sự kiện).
+        if (currentDiscountSource === 'device') {
+            try {
+                await markDiscountUsedApi();   // mỗi thiết bị chỉ dùng ưu đãi 5% đúng 1 lần
+                _deviceStatus.discountUsed = true;
+                checkDeviceDiscountCode();
+                applyAllFilters();             // cập nhật lại badge giảm giá + giá gạch ngang trên lưới Shop
+            } catch (err) {
+                console.error('Không thể ghi nhận sử dụng mã giảm giá:', err);
+            }
         }
+
+        document.getElementById('buyModalMsg').textContent = 'Đã gửi yêu cầu cho Admin! Vui lòng chờ Admin đối chiếu ngân hàng và duyệt.';
+        startBuyWait(result.deadlineMs, result.requestId);
+    } catch (err) {
+        submitBtn.disabled = false;
+        document.getElementById('buyModalMsg').textContent = 'Lỗi: ' + err.message;
+    }
+}
+
+// ============================================================
+// TÀI KHOẢN KHÁCH HÀNG — đăng ký/đăng nhập bắt buộc trước khi mua acc / tham gia sự kiện.
+// ============================================================
+let _customerAuthMode = 'login'; // 'login' | 'register'
+let _pendingCustomerAction = null; // { type: 'buy', code } | { type: 'event', eventId } — thực hiện tiếp ngay sau khi đăng nhập/đăng ký thành công
+
+// Nút trên navbar: hiện "Đăng Nhập" (mở modal) nếu chưa đăng nhập, hoặc "Tên khách (Đăng xuất)"
+// nếu đã đăng nhập — bấm vào khi đã đăng nhập sẽ hỏi xác nhận đăng xuất.
+function refreshCustomerAuthUI() {
+    const label = document.getElementById('customerAuthNavLabel');
+    if (!label) return;
+    if (isCustomerLoggedIn()) {
+        label.textContent = `${getCustomerUsername()} (Đăng xuất)`;
+    } else {
+        label.textContent = 'Đăng Nhập';
+    }
+}
+
+function openCustomerAuthModalOrAccount() {
+    if (isCustomerLoggedIn()) {
+        if (confirm(`Bạn đang đăng nhập với tài khoản "${getCustomerUsername()}". Đăng xuất ngay bây giờ?`)) {
+            customerLogoutApi().then(refreshCustomerAuthUI);
+        }
+        return;
+    }
+    openCustomerAuthModal('login');
+}
+
+function openCustomerAuthModal(mode) {
+    _customerAuthMode = mode || 'login';
+    document.getElementById('customerAuthUsername').value = '';
+    document.getElementById('customerAuthPassword').value = '';
+    document.getElementById('customerAuthMsg').textContent = '';
+    applyCustomerAuthMode();
+    document.getElementById('customerAuthModal').classList.add('active');
+}
+function closeCustomerAuthModal() {
+    document.getElementById('customerAuthModal').classList.remove('active');
+    _pendingCustomerAction = null;
+}
+function applyCustomerAuthMode() {
+    const isLogin = _customerAuthMode === 'login';
+    document.getElementById('customerAuthTitle').textContent = isLogin ? 'Đăng Nhập Tài Khoản' : 'Đăng Ký Tài Khoản Mới';
+    document.getElementById('customerAuthSubmitBtn').textContent = isLogin ? 'Đăng Nhập' : 'Đăng Ký';
+    document.getElementById('customerAuthToggleLink').textContent = isLogin ? 'Chưa có tài khoản? Đăng ký' : 'Đã có tài khoản? Đăng nhập';
+}
+function toggleCustomerAuthMode() {
+    _customerAuthMode = _customerAuthMode === 'login' ? 'register' : 'login';
+    document.getElementById('customerAuthMsg').textContent = '';
+    applyCustomerAuthMode();
+}
+
+// Gọi trước khi mở luồng mua/tham gia sự kiện — nếu chưa đăng nhập thì lưu lại thao tác đang
+// định làm (pendingCustomerAction) và mở modal đăng nhập, thực hiện tiếp ngay khi thành công.
+function requireCustomerLoginOrPrompt(action) {
+    if (isCustomerLoggedIn()) return true;
+    _pendingCustomerAction = action;
+    openCustomerAuthModal('login');
+    return false;
+}
+
+function resumePendingCustomerAction() {
+    const action = _pendingCustomerAction;
+    _pendingCustomerAction = null;
+    if (!action) return;
+    if (action.type === 'buy') openBuyModal(action.code);
+    else if (action.type === 'event') openEventQrModal(action.eventId);
+}
+
+async function submitCustomerAuth() {
+    const username = document.getElementById('customerAuthUsername').value.trim();
+    const password = document.getElementById('customerAuthPassword').value;
+    const msgEl = document.getElementById('customerAuthMsg');
+    const btn = document.getElementById('customerAuthSubmitBtn');
+    msgEl.textContent = '';
+
+    if (!username || !password) {
+        msgEl.textContent = 'Vui lòng nhập đầy đủ tên tài khoản và mật khẩu.';
+        return;
     }
 
-    const discountNote = currentDiscountApplied ? ` (đã áp giảm ${currentDiscountPercent}%)` : '';
-    alert(`Đã ghi nhận yêu cầu mua mã tài khoản [${currentBuyingCode}]${discountNote}. Hệ thống sẽ chuyển hướng bạn sang Zalo Admin để xác thực giao dịch chuyển khoản. Lưu ý chuyển đúng số tiền: ${formatVND(currentBuyingPrice)}.`);
-
-    const zaloUrl = (getSettings().socialLinks && getSettings().socialLinks.zalo) || 'https://zalo.me/0362062410';
-    const separator = zaloUrl.includes('?') ? '&' : '?';
-    const text = encodeURIComponent(`Admin oi, toi da thanh toan don hang ${currentBuyingCode} gia ${currentBuyingPrice}d${currentDiscountApplied ? ` (da ap giam ${currentDiscountPercent}%)` : ''}`);
-    window.open(`${zaloUrl}${separator}text=${text}`, '_blank');
-    closeModal();
+    btn.disabled = true;
+    try {
+        if (_customerAuthMode === 'login') {
+            await customerLoginApi(username, password);
+        } else {
+            await customerRegisterApi(username, password);
+        }
+        refreshCustomerAuthUI();
+        closeCustomerAuthModal();
+        resumePendingCustomerAction();
+    } catch (err) {
+        msgEl.textContent = err.message || 'Có lỗi xảy ra, vui lòng thử lại.';
+    } finally {
+        btn.disabled = false;
+    }
 }
+
+// Được data.js gọi khi token khách hết hạn/tài khoản bị khóa giữa chừng — cập nhật lại nút navbar.
+function onCustomerSessionExpired() {
+    refreshCustomerAuthUI();
+}
+
+// --- Quên mật khẩu: gửi yêu cầu lên máy chủ rồi mở Zalo để khách chủ động xác minh với Admin ---
+function openCustomerForgotModal() {
+    closeCustomerAuthModal();
+    document.getElementById('customerForgotUsername').value = document.getElementById('customerAuthUsername').value.trim();
+    document.getElementById('customerForgotMsg').textContent = '';
+    document.getElementById('customerForgotModal').classList.add('active');
+}
+function closeCustomerForgotModal() {
+    document.getElementById('customerForgotModal').classList.remove('active');
+}
+async function submitCustomerForgot() {
+    const username = document.getElementById('customerForgotUsername').value.trim();
+    const msgEl = document.getElementById('customerForgotMsg');
+    if (!username) {
+        msgEl.textContent = 'Vui lòng nhập tên tài khoản.';
+        return;
+    }
+    try {
+        const result = await customerRecoveryRequestApi(username, '');
+        msgEl.style.color = '#10b981';
+        msgEl.textContent = result.message || 'Đã gửi yêu cầu.';
+        const zaloUrl = (getSettings().socialLinks && getSettings().socialLinks.zalo) || 'https://zalo.me/0362062410';
+        const separator = zaloUrl.includes('?') ? '&' : '?';
+        const text = encodeURIComponent(`Admin oi, toi quen mat khau tai khoan "${username}" tren Shop, nho Admin xac minh va cap lai giup em.`);
+        window.open(`${zaloUrl}${separator}text=${text}`, '_blank');
+    } catch (err) {
+        msgEl.style.color = '#f87171';
+        msgEl.textContent = err.message || 'Có lỗi xảy ra, vui lòng thử lại.';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', refreshCustomerAuthUI);
