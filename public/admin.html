@@ -443,6 +443,81 @@
             </div>
         </div>
 
+        <!-- Phần 1D: Yêu Cầu Mua Acc (Đơn Hàng Online) -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-cart-shopping" style="color: var(--gold);"></i> Yêu Cầu Mua Acc (Đơn Hàng Online)
+                <span id="purchaseRequestsBadge" class="promo-5-badge" style="display:none; margin-left:8px;">0 chờ duyệt</span>
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                Khi khách bấm "Đã Thanh Toán - Gửi Yêu Cầu Cho Admin" ở trang Shop, yêu cầu hiện ngay ở đây kèm ảnh và
+                thông tin acc + thông tin người chuyển khoản. Đối chiếu ngân hàng đã nhận tiền rồi nhập tài khoản/mật
+                khẩu acc vào ô bên dưới và bấm <b>"Duyệt & Giao Acc"</b> để gửi ngay cho khách — acc sẽ tự động
+                <b>xóa vĩnh viễn</b> khỏi shop và được lưu vào lịch sử mua hàng của khách đó. Nếu chưa nhận được thanh
+                toán, bấm <b>"Từ chối"</b> — khách sẽ thấy "Thanh toán không thành công" và acc vẫn tiếp tục đăng bán
+                bình thường.
+            </p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Acc</th>
+                            <th>Khách Hàng</th>
+                            <th>Người Chuyển Khoản</th>
+                            <th>Thời Gian</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminPurchaseRequestsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Phần 1E: Quản Lý Tài Khoản Khách Hàng + Yêu Cầu Khôi Phục Mật Khẩu -->
+        <div class="admin-section">
+            <h3><i class="fa-solid fa-users" style="color: var(--gold);"></i> Quản Lý Tài Khoản Khách Hàng</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                Danh sách khách đã đăng ký tài khoản trên Shop. Có thể khóa/mở khóa, xem lại hoặc đặt lại mật khẩu
+                (chỉ nên dùng sau khi đã xác minh đúng chủ tài khoản qua Zalo), hoặc xóa hẳn tài khoản.
+            </p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tên Tài Khoản</th>
+                            <th>Trạng Thái</th>
+                            <th>Ngày Tạo</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminCustomersTableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="subsection-title">
+                Yêu Cầu Khôi Phục Mật Khẩu
+                <span id="recoveryRequestsBadge" class="promo-5-badge" style="display:none; margin-left:8px;">0 chờ xử lý</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+                Khách quên mật khẩu hoặc bị tự động khóa do nhập sai quá nhiều lần sẽ gửi yêu cầu ở đây. Hãy nhắn Zalo
+                xác minh đúng chủ tài khoản trước khi bấm xác nhận cấp lại mật khẩu.
+            </p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tên Tài Khoản</th>
+                            <th>Ghi Chú</th>
+                            <th>Thời Gian</th>
+                            <th>Trạng Thái</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminRecoveryRequestsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Phần 2: Nhật Ký Hoạt Động (khóa/mở khóa/xóa/sửa...) -->
         <div class="admin-section">
             <h3><i class="fa-solid fa-clock-rotate-left" style="color: var(--gold);"></i> Nhật Ký Hoạt Động Tài Khoản</h3>
