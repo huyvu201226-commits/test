@@ -333,6 +333,25 @@ function requireCustomer(req, res, next) {
     next();
 }
 
+// Bắt buộc Admin gõ LẠI mật khẩu quản trị ngay trong request (field "adminPassword") trước khi
+// cho thực hiện các thao tác cực nhạy cảm trên tài khoản khách hàng (xem mật khẩu gốc, đặt lại
+// mật khẩu, xóa tài khoản) — giống hệt cơ chế xác nhận đã dùng khi tạo tài khoản CTV. Có token
+// Admin hợp lệ (đăng nhập trước đó) thôi CHƯA đủ cho các hành động này: nếu ai đó ngồi vào máy
+// đang mở sẵn phiên Admin (hoặc token bị lộ), họ vẫn không đọc/đổi được mật khẩu khách nếu không
+// biết mật khẩu quản trị thật.
+function requireAdminPasswordConfirm(req, res, next) {
+    const { adminPassword } = req.body || {};
+    if (!adminPassword) {
+        return res.status(400).json({ error: 'Vui lòng nhập lại mật khẩu Admin để xác nhận thao tác này.' });
+    }
+    ensureAdminPasswordInitialized();
+    const hash = hashPassword(adminPassword, db.settings.adminPasswordSalt);
+    if (hash !== db.settings.adminPasswordHash) {
+        return res.status(401).json({ error: 'Mật khẩu Admin xác nhận không đúng.' });
+    }
+    next();
+}
+
 // ------------------------------------------------------------
 // Ô "Thời gian bắt đầu/kết thúc" trong trang quản trị là <input type="datetime-local">, trả về
 // chuỗi KHÔNG có múi giờ (VD "2026-07-27T09:00"). Nếu parse thẳng bằng new Date(...), Node sẽ
@@ -415,6 +434,18 @@ const loginLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Thử đăng nhập quá nhiều lần, vui lòng đợi ít phút rồi thử lại.' }
+});
+
+// Giới hạn riêng cho các thao tác NHẠY CẢM trên tài khoản khách hàng (xem mật khẩu gốc, đặt lại
+// mật khẩu, xóa tài khoản) — tách khỏi loginLimiter vì đây là hành động của Admin sau khi đã
+// đăng nhập, không phải nỗ lực đăng nhập, nhưng vẫn cần chặn nếu token Admin bị lộ/dùng sai mục
+// đích (VD: 1 phiên bị chiếm quyền cố quét mật khẩu hàng loạt khách hàng).
+const sensitiveCustomerActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Thao tác nhạy cảm này đang bị giới hạn tần suất, vui lòng đợi ít phút rồi thử lại.' }
 });
 
 app.use(cors());
@@ -992,7 +1023,7 @@ app.get('/api/admin/customers', requireAdmin, (req, res) => {
     res.json(db.customers.map(publicCustomer));
 });
 
-app.put('/api/admin/customers/:id/toggle-lock', requireAdmin, (req, res) => {
+app.put('/api/admin/customers/:id/toggle-lock', requireAdmin, sensitiveCustomerActionLimiter, (req, res) => {
     ensureCustomersInitialized();
     const customer = db.customers.find(c => c.id === req.params.id);
     if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
@@ -1014,7 +1045,8 @@ app.put('/api/admin/customers/:id/toggle-lock', requireAdmin, (req, res) => {
     res.json(publicCustomer(customer));
 });
 
-app.delete('/api/admin/customers/:id', requireAdmin, (req, res) => {
+// Xóa tài khoản khách — thao tác không thể hoàn tác nên bắt xác nhận lại mật khẩu Admin.
+app.delete('/api/admin/customers/:id', requireAdmin, sensitiveCustomerActionLimiter, requireAdminPasswordConfirm, (req, res) => {
     ensureCustomersInitialized();
     const idx = db.customers.findIndex(c => c.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
@@ -1025,8 +1057,10 @@ app.delete('/api/admin/customers/:id', requireAdmin, (req, res) => {
 });
 
 // Xem lại mật khẩu gốc (giải mã AES) — chỉ dùng sau khi đã xác minh đúng chủ tài khoản qua
-// Zalo. Ghi log mỗi lần dùng vì đây là thao tác nhạy cảm.
-app.get('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
+// Zalo. Bắt Admin gõ lại mật khẩu quản trị (requireAdminPasswordConfirm) + giới hạn tần suất
+// gọi, vì đây là thao tác nhạy cảm nhất trong toàn hệ thống (lộ mật khẩu gốc của khách). Dùng
+// POST thay vì GET để có thể gửi kèm mật khẩu xác nhận trong body một cách an toàn.
+app.post('/api/admin/customers/:id/view-password', requireAdmin, sensitiveCustomerActionLimiter, requireAdminPasswordConfirm, (req, res) => {
     ensureCustomersInitialized();
     const customer = db.customers.find(c => c.id === req.params.id);
     if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
@@ -1039,7 +1073,8 @@ app.get('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
 
 // Đặt lại mật khẩu bằng 1 mật khẩu tạm ngẫu nhiên (khi không giải mã được / khách muốn đổi hẳn
 // mật khẩu mới) — tự mở khóa và xóa số lần nhập sai luôn để khách đăng nhập lại được ngay.
-app.put('/api/admin/customers/:id/reset-password', requireAdmin, (req, res) => {
+// Cũng bắt xác nhận lại mật khẩu Admin vì đây là thao tác thay thế toàn bộ mật khẩu của khách.
+app.put('/api/admin/customers/:id/reset-password', requireAdmin, sensitiveCustomerActionLimiter, requireAdminPasswordConfirm, (req, res) => {
     ensureCustomersInitialized();
     const customer = db.customers.find(c => c.id === req.params.id);
     if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });

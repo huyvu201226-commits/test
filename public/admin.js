@@ -84,6 +84,43 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Event delegation cho bảng Yêu Cầu Mua Acc
+    const purchaseRequestsTbody = document.getElementById('adminPurchaseRequestsTableBody');
+    if (purchaseRequestsTbody) {
+        purchaseRequestsTbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            if (btn.dataset.action === 'approve-purchase-request') approvePurchaseRequestUI(id);
+            if (btn.dataset.action === 'reject-purchase-request') rejectPurchaseRequestUI(id);
+        });
+    }
+
+    // Event delegation cho bảng Quản Lý Khách Hàng
+    const customersTbody = document.getElementById('adminCustomersTableBody');
+    if (customersTbody) {
+        customersTbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            if (btn.dataset.action === 'toggle-customer-lock') toggleCustomerLockUI(id);
+            if (btn.dataset.action === 'delete-customer') deleteCustomerUI(id);
+            if (btn.dataset.action === 'view-customer-password') viewCustomerPasswordUI(id);
+            if (btn.dataset.action === 'reset-customer-password') resetCustomerPasswordUI(id);
+        });
+    }
+
+    // Event delegation cho bảng Yêu Cầu Khôi Phục Mật Khẩu
+    const recoveryTbody = document.getElementById('adminRecoveryRequestsTableBody');
+    if (recoveryTbody) {
+        recoveryTbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            if (btn.dataset.action === 'resolve-recovery-request') resolveRecoveryRequestUI(id);
+        });
+    }
+
     const rewardsContainer = document.getElementById('eventRewardsContainer');
     if (rewardsContainer) {
         addRewardRow(); // 1 dòng phần thưởng trống sẵn để tạo sự kiện mới
@@ -130,6 +167,9 @@ async function loadAdminData() {
     renderActivityLog();
     renderEventsAdmin();
     renderEventRequestsAdmin();
+    renderPurchaseRequestsAdmin();
+    renderCustomersAdmin();
+    renderRecoveryRequestsAdmin();
     updateAdminNavLogo();
     loadCollaborators();
     startEventRequestsPolling();
@@ -151,6 +191,18 @@ function startEventRequestsPolling() {
         } catch (err) {
             // Bỏ qua lỗi mạng tạm thời của 1 lần polling, sẽ tự thử lại ở lần kế tiếp
             console.error('Không thể làm mới yêu cầu tham gia sự kiện:', err);
+        }
+        try {
+            await fetchPurchaseRequestsAdminApi();
+            renderPurchaseRequestsAdmin();
+        } catch (err) {
+            console.error('Không thể làm mới yêu cầu mua acc:', err);
+        }
+        try {
+            await fetchPasswordRecoveryRequestsApi();
+            renderRecoveryRequestsAdmin();
+        } catch (err) {
+            console.error('Không thể làm mới yêu cầu khôi phục mật khẩu:', err);
         }
     }, 15000); // 15 giây/lần — đủ nhanh để Admin duyệt kịp cho khách mà không gọi API quá dày
 }
@@ -789,6 +841,227 @@ async function rejectEventRequestUI(id) {
         renderActivityLog();
     } catch (err) {
         alert('Lỗi khi từ chối yêu cầu: ' + err.message);
+    }
+}
+
+// ------------------------------------------------------------
+// Yêu Cầu Mua Acc (Kho Tài Khoản Bán)
+// ------------------------------------------------------------
+function renderPurchaseRequestsAdmin() {
+    const tbody = document.getElementById('adminPurchaseRequestsTableBody');
+    const badge = document.getElementById('purchaseRequestsBadge');
+    if (!tbody) return;
+    const requests = getPurchaseRequestsAdmin();
+
+    const pendingCount = requests.filter(r => r.status === 'pending').length;
+    if (badge) {
+        if (pendingCount > 0) {
+            badge.style.display = 'inline-block';
+            badge.textContent = `${pendingCount} chờ duyệt`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="log-empty">Chưa có yêu cầu mua acc nào.</td></tr>';
+        return;
+    }
+
+    const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN') : '—';
+    const fragment = document.createDocumentFragment();
+    const sorted = [...requests].sort((a, b) => (a.status === 'pending' ? -1 : 0) - (b.status === 'pending' ? -1 : 0) || b.createdAt - a.createdAt);
+    sorted.forEach(r => {
+        const statusInfo = PURCHASE_REQUEST_STATUS_LABELS[r.status] || { text: r.status, badge: 'badge-sold' };
+        const actions = r.status === 'pending'
+            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="approve-purchase-request">Duyệt</button>
+               <button class="btn-sm btn-delete" data-id="${r.id}" data-action="reject-purchase-request">Từ chối</button>`
+            : (r.status === 'rejected' && r.rejectReason ? `<span style="font-size:0.75rem;color:var(--text-muted);">Lý do: ${escapeHtml(r.rejectReason)}</span>` : '—');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(r.accountCode)}<div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(r.accountName)} · ${formatVND(r.accountPrice)}</div></td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.customerUsername)}</td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.payerName || '—')}${r.payerBankAccount ? ' · ' + escapeHtml(r.payerBankAccount) : ''}</td>
+            <td style="font-size:0.8rem;">${fmt(r.createdAt)}</td>
+            <td><span class="badge-status ${statusInfo.badge}">${statusInfo.text}</span></td>
+            <td>${actions}</td>
+        `;
+        fragment.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+}
+
+async function approvePurchaseRequestUI(id) {
+    if (!confirm('Duyệt yêu cầu mua acc này? Acc sẽ tự động chuyển sang trạng thái "Đã bán".')) return;
+    try {
+        await approvePurchaseRequestApi(id);
+        renderPurchaseRequestsAdmin();
+        renderAdminAccounts();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi duyệt yêu cầu: ' + err.message);
+    }
+}
+
+async function rejectPurchaseRequestUI(id) {
+    const reason = prompt('Lý do từ chối (không bắt buộc, để trống nếu không cần):', '') || '';
+    try {
+        await rejectPurchaseRequestApi(id, reason);
+        renderPurchaseRequestsAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi từ chối yêu cầu: ' + err.message);
+    }
+}
+
+// ------------------------------------------------------------
+// Quản Lý Khách Hàng (khóa/mở khóa/xóa, xem lại/đặt lại mật khẩu)
+// ------------------------------------------------------------
+function renderCustomersAdmin() {
+    const tbody = document.getElementById('adminCustomersTableBody');
+    if (!tbody) return;
+    const customers = getCustomers();
+
+    if (customers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="log-empty">Chưa có khách hàng nào đăng ký.</td></tr>';
+        return;
+    }
+
+    const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN') : '—';
+    const fragment = document.createDocumentFragment();
+    customers.forEach(c => {
+        const statusInfo = CUSTOMER_STATUS_LABELS[c.status] || { text: c.status, badge: 'badge-sold' };
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${escapeHtml(c.username)}</b></td>
+            <td><span class="badge-status ${statusInfo.badge}">${statusInfo.text}</span></td>
+            <td style="font-size:0.8rem;">${fmt(c.createdAt)}</td>
+            <td>
+                <button class="btn-sm ${c.status === 'locked' ? 'btn-unlock' : 'btn-lock'}" data-id="${c.id}" data-action="toggle-customer-lock">${c.status === 'locked' ? 'Mở khóa' : 'Khóa'}</button>
+                <button class="btn-sm btn-edit" data-id="${c.id}" data-action="view-customer-password">Xem MK</button>
+                <button class="btn-sm btn-edit" data-id="${c.id}" data-action="reset-customer-password">Đặt lại MK</button>
+                <button class="btn-sm btn-delete" data-id="${c.id}" data-action="delete-customer">Xóa</button>
+            </td>
+        `;
+        fragment.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+}
+
+async function toggleCustomerLockUI(id) {
+    const customer = getCustomers().find(c => c.id === id);
+    if (!customer) return;
+    let reason = '';
+    if (customer.status !== 'locked') {
+        reason = prompt('Lý do khóa tài khoản này (không bắt buộc):', '') || '';
+    } else if (!confirm(`Mở khóa tài khoản "${customer.username}"?`)) {
+        return;
+    }
+    try {
+        await toggleCustomerLockApi(id, reason);
+        renderCustomersAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi: ' + err.message);
+    }
+}
+
+async function deleteCustomerUI(id) {
+    const customer = getCustomers().find(c => c.id === id);
+    if (!customer) return;
+    if (!confirm(`Xóa vĩnh viễn tài khoản "${customer.username}"? Không thể hoàn tác.`)) return;
+    const adminPassword = prompt('Xác nhận: nhập lại mật khẩu Admin để xóa tài khoản này:');
+    if (!adminPassword) return;
+    try {
+        await deleteCustomerApi(id, adminPassword);
+        renderCustomersAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi xóa tài khoản: ' + err.message);
+    }
+}
+
+async function viewCustomerPasswordUI(id) {
+    const adminPassword = prompt('Chỉ xem lại mật khẩu SAU KHI đã xác minh đúng chủ tài khoản qua Zalo.\nNhập lại mật khẩu Admin để xác nhận:');
+    if (!adminPassword) return;
+    try {
+        const data = await viewCustomerPasswordApi(id, adminPassword);
+        alert(`Tài khoản: ${data.username}\nMật khẩu: ${data.password}`);
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi: ' + err.message);
+    }
+}
+
+async function resetCustomerPasswordUI(id) {
+    if (!confirm('Cấp mật khẩu tạm mới cho tài khoản này? Mật khẩu cũ sẽ không còn dùng được và tài khoản sẽ tự mở khóa.')) return;
+    const adminPassword = prompt('Xác nhận: nhập lại mật khẩu Admin để đặt lại mật khẩu khách:');
+    if (!adminPassword) return;
+    try {
+        const data = await resetCustomerPasswordApi(id, adminPassword);
+        alert(`Tài khoản: ${data.username}\nMật khẩu tạm mới: ${data.tempPassword}\n\nHãy gửi mật khẩu này cho khách qua Zalo.`);
+        renderCustomersAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi khi đặt lại mật khẩu: ' + err.message);
+    }
+}
+
+// ------------------------------------------------------------
+// Yêu Cầu Khôi Phục Mật Khẩu
+// ------------------------------------------------------------
+function renderRecoveryRequestsAdmin() {
+    const tbody = document.getElementById('adminRecoveryRequestsTableBody');
+    const badge = document.getElementById('recoveryRequestsBadge');
+    if (!tbody) return;
+    const requests = getPasswordRecoveryRequests();
+
+    const pendingCount = requests.filter(r => r.status === 'pending').length;
+    if (badge) {
+        if (pendingCount > 0) {
+            badge.style.display = 'inline-block';
+            badge.textContent = `${pendingCount} chờ xử lý`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="log-empty">Chưa có yêu cầu khôi phục mật khẩu nào.</td></tr>';
+        return;
+    }
+
+    const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN') : '—';
+    const fragment = document.createDocumentFragment();
+    const sorted = [...requests].sort((a, b) => (a.status === 'pending' ? -1 : 0) - (b.status === 'pending' ? -1 : 0) || b.createdAt - a.createdAt);
+    sorted.forEach(r => {
+        const statusInfo = RECOVERY_REQUEST_STATUS_LABELS[r.status] || { text: r.status, badge: 'badge-sold' };
+        const actions = r.status === 'pending'
+            ? `<button class="btn-sm btn-unlock" data-id="${r.id}" data-action="resolve-recovery-request">Đánh dấu đã xử lý</button>`
+            : '—';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${escapeHtml(r.username)}</b></td>
+            <td style="font-size:0.8rem;">${escapeHtml(r.note || '—')}</td>
+            <td style="font-size:0.8rem;">${fmt(r.createdAt)}</td>
+            <td><span class="badge-status ${statusInfo.badge}">${statusInfo.text}</span></td>
+            <td>${actions}</td>
+        `;
+        fragment.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+}
+
+async function resolveRecoveryRequestUI(id) {
+    try {
+        await resolveRecoveryRequestApi(id);
+        renderRecoveryRequestsAdmin();
+        renderActivityLog();
+    } catch (err) {
+        alert('Lỗi: ' + err.message);
     }
 }
 
