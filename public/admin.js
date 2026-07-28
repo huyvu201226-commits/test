@@ -888,7 +888,10 @@ function renderPurchaseRequestsAdmin() {
                 : (r.status === 'rejected' && r.rejectReason ? `<span style="font-size:0.75rem;color:var(--text-muted);">Lý do: ${escapeHtml(r.rejectReason)}</span>` : '—'));
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${escapeHtml(r.accountCode)}<div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(r.accountName)} · ${formatVND(r.accountPrice)}</div></td>
+            <td style="display:flex; gap:8px; align-items:flex-start;">
+                <img class="admin-thumb" src="${escapeHtml(resolveMediaSrc(r.accountImage, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=300'))}" alt="Ảnh ${escapeHtml(r.accountCode)}" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+                <div>${escapeHtml(r.accountCode)}<div style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(r.accountName)} · ${formatVND(r.accountPrice)}</div></div>
+            </td>
             <td style="font-size:0.8rem;">${escapeHtml(r.customerUsername)}</td>
             <td style="font-size:0.8rem;">${escapeHtml(r.payerName || '—')}${r.payerBankAccount ? ' · ' + escapeHtml(r.payerBankAccount) : ''}${r.phoneNumber ? '<br><span style="color:var(--gold);">SĐT cần đổi: ' + escapeHtml(r.phoneNumber) + '</span>' : ''}</td>
             <td style="font-size:0.8rem;">${fmt(r.createdAt)}</td>
@@ -910,7 +913,7 @@ async function approvePurchaseRequestUI(id) {
         alert('Vui lòng nhập đầy đủ tài khoản và mật khẩu của acc để giao cho khách trước khi duyệt.');
         return;
     }
-    if (!confirm('Duyệt yêu cầu mua acc này và giao ngay tài khoản/mật khẩu vừa nhập cho khách? Acc sẽ tự động chuyển sang trạng thái "Đã bán".')) return;
+    if (!confirm('Duyệt yêu cầu mua acc này và giao ngay tài khoản/mật khẩu vừa nhập cho khách? Acc sẽ bị XÓA VĨNH VIỄN khỏi shop và lưu vào lịch sử mua hàng của khách này.')) return;
     try {
         await approvePurchaseRequestApi(id, deliveredAccount, deliveredPassword);
         renderPurchaseRequestsAdmin();

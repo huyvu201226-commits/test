@@ -482,3 +482,6 @@ async function submitPurchaseRequestApi(accountId, payerName, payerBankAccount, 
 async function getMyPurchaseRequestsApi() {
     return apiFetch('/api/purchase-requests/mine');
 }
+async function getMyPurchaseHistoryApi() {
+    return apiFetch('/api/customer/purchase-history');
+}

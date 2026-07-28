@@ -76,7 +76,6 @@ const CUSTOMER_MAX_FAILED_ATTEMPTS = 5;
 const PAYMENT_REVIEW_WINDOW_MS = 5 * 60 * 1000;
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-if (!fs.existsSync(path.dirname(DB_PATH))) fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 // ------------------------------------------------------------
 // Lớp lưu trữ: đọc toàn bộ DB vào bộ nhớ khi khởi động, mọi thay đổi
@@ -833,6 +832,7 @@ app.post('/api/purchase-requests', requireCustomer, (req, res) => {
         accountCode: acc.code,
         accountName: acc.name,
         accountPrice: acc.price,
+        accountImage: acc.img || '',
         payerName: payerName ? String(payerName).slice(0, 100) : '',
         payerBankAccount: payerBankAccount ? String(payerBankAccount).slice(0, 50) : '',
         phoneNumber: phone,
@@ -883,10 +883,31 @@ app.put('/api/admin/purchase-requests/:id/approve', requireAdmin, (req, res) => 
     reqEntry.deliveredAccount = account;
     reqEntry.deliveredPassword = password;
 
-    const acc = db.accounts.find(a => a.id === reqEntry.accountId);
-    if (acc && acc.status === 'selling') acc.status = 'sold';
+    // Acc đã bán thì xóa vĩnh viễn khỏi kho (không chỉ đổi trạng thái) — khách khác sẽ
+    // không còn thấy/mua trùng acc này nữa.
+    const accIdx = db.accounts.findIndex(a => a.id === reqEntry.accountId);
+    if (accIdx !== -1) db.accounts.splice(accIdx, 1);
 
-    addActivityLog('Duyệt yêu cầu mua acc', `Đã duyệt khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}) và giao tài khoản. [${actorLabel(req)}]`);
+    // Lưu vào lịch sử mua hàng của đúng khách đó — khách sẽ xem lại được acc + tài khoản/mật
+    // khẩu đã nhận trong trang "Lịch Sử Mua Hàng" của riêng họ.
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.username === reqEntry.customerUsername);
+    if (customer) {
+        if (!Array.isArray(customer.purchaseHistory)) customer.purchaseHistory = [];
+        customer.purchaseHistory.unshift({
+            id: reqEntry.id,
+            accountCode: reqEntry.accountCode,
+            accountName: reqEntry.accountName,
+            accountPrice: reqEntry.accountPrice,
+            accountImage: reqEntry.accountImage || '',
+            deliveredAccount: account,
+            deliveredPassword: password,
+            purchasedAt: reqEntry.resolvedAt
+        });
+        customer.updatedAt = Date.now();
+    }
+
+    addActivityLog('Duyệt yêu cầu mua acc', `Đã duyệt khách "${reqEntry.customerUsername}" mua acc ${reqEntry.accountCode} (${reqEntry.accountName}), giao tài khoản và xóa vĩnh viễn acc khỏi shop. [${actorLabel(req)}]`);
     persist();
     res.json(reqEntry);
 });
@@ -943,6 +964,7 @@ app.post('/api/customer/register', loginLimiter, (req, res) => {
         failedAttempts: 0,
         lockedAt: null,
         lockReason: null,
+        purchaseHistory: [],
         createdAt: Date.now(),
         updatedAt: Date.now()
     };
@@ -1004,6 +1026,15 @@ app.get('/api/customer/me', requireCustomer, (req, res) => {
     const customer = db.customers.find(c => c.username === req.customerUsername);
     if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
     res.json(publicCustomer(customer));
+});
+
+// Lịch sử mua hàng của chính khách đang đăng nhập — gồm acc đã mua kèm tài khoản/mật khẩu đã
+// nhận (chỉ khách đó xem được, do đã lọc theo đúng req.customerUsername qua requireCustomer).
+app.get('/api/customer/purchase-history', requireCustomer, (req, res) => {
+    ensureCustomersInitialized();
+    const customer = db.customers.find(c => c.username === req.customerUsername);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    res.json(Array.isArray(customer.purchaseHistory) ? customer.purchaseHistory : []);
 });
 
 // Khách quên mật khẩu (hoặc tài khoản đã bị khóa do sai quá nhiều lần) — gửi yêu cầu kèm ghi

@@ -299,6 +299,20 @@
         </div>
     </div>
 
+    <!-- Modal Tài Khoản Của Tôi — hiện khi khách bấm vào tên tài khoản trên navbar lúc đã đăng
+         nhập. Gồm lịch sử mua hàng (acc + tài khoản/mật khẩu đã nhận) và nút đăng xuất. -->
+    <div class="modal-overlay" id="customerAccountModal">
+        <div class="modal-card animate-pop" style="max-width: 480px;">
+            <button class="btn-close-modal" onclick="closeCustomerAccountModal()">&times;</button>
+            <h3 style="margin-bottom: 10px;"><i class="fa-solid fa-user"></i> Tài Khoản Của Tôi: <span id="customerAccountUsername"></span></h3>
+            <h4 style="margin: 14px 0 8px; font-size: 0.95rem;"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử Mua Hàng</h4>
+            <div id="customerHistoryList" style="max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+                <p style="font-size: 0.82rem; color: var(--text-muted);">Đang tải...</p>
+            </div>
+            <button class="btn-submit" style="margin-top: 16px; background: #f87171;" onclick="logoutFromCustomerAccountModal()">Đăng Xuất</button>
+        </div>
+    </div>
+
     <!-- Modal Thanh Toán QR Tự Động -->
     <div class="modal-overlay" id="buyModal">
         <div class="modal-card animate-pop">

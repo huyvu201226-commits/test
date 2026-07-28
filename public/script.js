@@ -1215,7 +1215,7 @@ function startBuyWait(deadlineMs, requestId) {
                     document.getElementById('buyDeliveredBox').style.display = 'block';
                     renderAccounts(getAccounts());
                 } else {
-                    document.getElementById('buyModalMsg').textContent = `Yêu cầu đã bị từ chối.${reqEntry.rejectReason ? ' Lý do: ' + reqEntry.rejectReason : ''}`;
+                    document.getElementById('buyModalMsg').textContent = `Thanh toán không thành công.${reqEntry.rejectReason ? ' Lý do: ' + reqEntry.rejectReason : ''}`;
                     submitBtn.style.display = 'inline-block';
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Gửi Lại Yêu Cầu';
@@ -1297,13 +1297,52 @@ function refreshCustomerAuthUI() {
 
 function openCustomerAuthModalOrAccount() {
     if (isCustomerLoggedIn()) {
-        if (confirm(`Bạn đang đăng nhập với tài khoản "${getCustomerUsername()}". Đăng xuất ngay bây giờ?`)) {
-            customerLogoutApi().then(refreshCustomerAuthUI);
-        }
+        openCustomerAccountModal();
         return;
     }
     _authGateMandatory = false; // mở từ navbar luôn đóng được, không phải cổng bắt buộc
     openCustomerAuthModal('login');
+}
+
+// ------------------------------------------------------------
+// Modal "Tài Khoản Của Tôi" — lịch sử mua hàng (acc + tài khoản/mật khẩu đã nhận) + đăng xuất.
+// ------------------------------------------------------------
+async function openCustomerAccountModal() {
+    document.getElementById('customerAccountUsername').textContent = getCustomerUsername() || '';
+    const listEl = document.getElementById('customerHistoryList');
+    listEl.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);">Đang tải...</p>';
+    document.getElementById('customerAccountModal').classList.add('active');
+
+    try {
+        const history = await getMyPurchaseHistoryApi();
+        if (!history || history.length === 0) {
+            listEl.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);">Bạn chưa mua acc nào.</p>';
+            return;
+        }
+        listEl.innerHTML = history.map(h => `
+            <div style="display:flex; gap:10px; padding:10px; border:1px solid var(--border-color, #333); border-radius:8px;">
+                <img src="${resolveMediaSrc(h.accountImage, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=300')}" alt="${escapeHtml(h.accountCode)}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+                <div style="font-size:0.82rem; flex:1;">
+                    <div><b>${escapeHtml(h.accountCode)}</b> — ${escapeHtml(h.accountName)}</div>
+                    <div style="color:var(--text-muted);">${formatVND(h.accountPrice)} · ${formatDateTime(h.purchasedAt)}</div>
+                    <div style="margin-top:4px;">Tài khoản: <b>${escapeHtml(h.deliveredAccount || '—')}</b></div>
+                    <div>Mật khẩu: <b>${escapeHtml(h.deliveredPassword || '—')}</b></div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        listEl.innerHTML = `<p style="font-size:0.82rem;color:#f87171;">Lỗi khi tải lịch sử mua hàng: ${escapeHtml(err.message)}</p>`;
+    }
+}
+function closeCustomerAccountModal() {
+    document.getElementById('customerAccountModal').classList.remove('active');
+}
+function logoutFromCustomerAccountModal() {
+    if (!confirm(`Bạn đang đăng nhập với tài khoản "${getCustomerUsername()}". Đăng xuất ngay bây giờ?`)) return;
+    customerLogoutApi().then(() => {
+        refreshCustomerAuthUI();
+        closeCustomerAccountModal();
+    });
 }
 
 function openCustomerAuthModal(mode) {
